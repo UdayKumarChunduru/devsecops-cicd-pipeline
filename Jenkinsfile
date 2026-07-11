@@ -1,0 +1,120 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME       = 'demo-service'
+        NEXUS_REGISTRY = 'localhost:8082'
+        SONAR_HOST_URL = 'http://sonarqube:9000'
+        IMAGE_TAG      = "${env.BUILD_NUMBER}"
+        IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Secret scan - Gitleaks') {
+            steps {
+                sh '''
+                  docker run --rm -v "$WORKSPACE:/repo" zricethezav/gitleaks:latest \
+                    detect --source /repo --report-format json \
+                    --report-path /repo/gitleaks-report.json
+                '''
+            }
+            post {
+                always { archiveArtifacts artifacts: 'gitleaks-report.json', allowEmptyArchive: true }
+            }
+        }
+
+        stage('Static analysis - SonarQube') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    dir('app') {
+                        sh 'mvn -B clean verify sonar:sonar -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN'
+                    }
+                }
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Dependency scan - OWASP') {
+            steps {
+                dir('app') {
+                    // fail at CVSS 7 and above
+                    sh 'mvn -B org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7'
+                }
+            }
+            post {
+                always { archiveArtifacts artifacts: 'app/target/dependency-check-report.html', allowEmptyArchive: true }
+            }
+        }
+
+        stage('Dependency scan - Snyk') {
+            steps {
+                withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                    dir('app') {
+                        sh '''
+                          docker run --rm -e SNYK_TOKEN -v "$PWD:/project" -w /project \
+                            snyk/snyk:maven snyk test --severity-threshold=high
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build image') {
+            steps {
+                dir('app') {
+                    sh 'docker build -t $IMAGE .'
+                }
+            }
+        }
+
+        stage('Image scan - Trivy') {
+            steps {
+                // zero-Critical policy: exit code 1 on any CRITICAL finding
+                sh '''
+                  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                    aquasec/trivy:latest image --exit-code 1 --severity CRITICAL \
+                    --no-progress $IMAGE
+                  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                    aquasec/trivy:latest image --severity HIGH,MEDIUM --no-progress $IMAGE || true
+                '''
+            }
+        }
+
+        stage('Push to Nexus') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    sh '''
+                      echo "$NEXUS_PASS" | docker login $NEXUS_REGISTRY -u "$NEXUS_USER" --password-stdin
+                      docker push $IMAGE
+                      docker logout $NEXUS_REGISTRY
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh '''
+                      sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment.yaml | kubectl apply -f -
+                      kubectl apply -f k8s/service.yaml
+                      kubectl rollout status deployment/demo-service --timeout=120s
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "Build ${env.BUILD_NUMBER} failed. Check the stage logs and archived scanner reports."
+        }
+    }
+}
