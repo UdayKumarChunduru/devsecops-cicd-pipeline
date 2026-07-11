@@ -52,7 +52,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
                     dir('app') {
-                        sh 'mvn -B org.owasp:dependency-check-maven:check -DnvdApiKey=$NVD_API_KEY -DfailBuildOnCVSS=7'
+                        sh 'mvn -B org.owasp:dependency-check-maven:check -DnvdApiKey=$NVD_API_KEY -DdataDirectory=/var/jenkins_home/dependency-check-data -DfailBuildOnCVSS=7'
                     }
                 }
             }
