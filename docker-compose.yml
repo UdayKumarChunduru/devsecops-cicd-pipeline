@@ -6,6 +6,7 @@ services:
     image: jenkins-devsecops:lts-jdk21
     container_name: jenkins
     user: root
+    mem_limit: 3g
     ports:
       - "8080:8080"
       - "50000:50000"
