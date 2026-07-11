@@ -7,6 +7,7 @@ pipeline {
         SONAR_HOST_URL = 'http://sonarqube:9000'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
+        MAVEN_OPTS     = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
     }
 
     options {
@@ -36,7 +37,7 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                         dir('app') {
-                            sh 'mvn clean verify sonar:sonar -B -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=. ${MAVEN_OPTS}'
+                            sh 'mvn clean verify sonar:sonar -B -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=.'
                         }
                     }
                 }
@@ -50,12 +51,10 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                     dir('app') {
-                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                            sh '''
-                              snyk auth $SNYK_TOKEN
-                              snyk test --severity-threshold=high --maven-repo-path=/var/jenkins_home/.m2/repository
-                            '''
-                        }
+                        sh '''
+                          snyk auth $SNYK_TOKEN
+                          snyk test --severity-threshold=high --maven-repo-path=/var/jenkins_home/.m2/repository
+                        '''
                     }
                 }
             }
@@ -64,7 +63,7 @@ pipeline {
         stage('Dependency scan - Trivy FS') {
             steps {
                 dir('app') {
-                    sh 'trivy fs --severity HIGH,CRITICAL .'
+                    sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
                 }
             }
         }
