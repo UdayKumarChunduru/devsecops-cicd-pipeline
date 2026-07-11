@@ -48,33 +48,13 @@ pipeline {
             }
         }
 
-        stage('Debug Snyk Mount') {
-            steps {
-                dir('app') {
-                    sh '''
-                        pwd
-                        ls -la
-
-                        docker run --rm \
-                          -v "$PWD":/project \
-                          alpine:latest \
-                          sh -c "ls -la /project && find /project -name pom.xml"
-                    '''
-                }
-            }
-        }
-
         stage('Dependency scan - Snyk') {
             steps {
                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                     dir('app') {
                         sh '''
-                          docker run --rm \
-                            -e SNYK_TOKEN \
-                            -v "$PWD:/project" \
-                            -w /project \
-                            snyk/snyk:maven \
-                            snyk test --severity-threshold=high
+                          snyk auth $SNYK_TOKEN
+                          snyk test --severity-threshold=high
                         '''
                     }
                 }
