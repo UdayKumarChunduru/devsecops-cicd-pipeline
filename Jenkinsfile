@@ -32,6 +32,18 @@ pipeline {
             }
         }
 
+        stage('Lambda - lint and test') {
+            steps {
+                dir('aws/lambda') {
+                    sh '''
+                      pip install --break-system-packages --quiet flake8 -r requirements-test.txt
+                      flake8 falco_remediation.py tests/ --max-line-length=100 --ignore=E501,W503
+                      python3 -m pytest tests/ -v
+                    '''
+                }
+            }
+        }
+
         stage('Static analysis - SonarQube') {
             steps {
                 withSonarQubeEnv('SonarQube') {
