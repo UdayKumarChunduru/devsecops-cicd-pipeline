@@ -28,6 +28,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
 
 RUN npm install -g snyk
 
-RUN node --version && npm --version && snyk --version
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+RUN curl -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz && \
+    tar -xzf gitleaks.tar.gz gitleaks && \
+    mv gitleaks /usr/local/bin/ && \
+    rm gitleaks.tar.gz
+
+RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version
 
 USER jenkins

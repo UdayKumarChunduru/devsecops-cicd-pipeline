@@ -18,14 +18,11 @@ pipeline {
         stage('Secret scan - Gitleaks') {
             steps {
                 sh '''
-                  docker run --rm \
-                    -v "$WORKSPACE:/repo" \
-                    zricethezav/gitleaks:latest \
-                    detect \
+                  gitleaks detect \
                     --no-git \
-                    --source /repo \
+                    --source . \
                     --report-format json \
-                    --report-path /repo/gitleaks-report.json
+                    --report-path gitleaks-report.json
                 '''
             }
             post {
@@ -64,9 +61,7 @@ pipeline {
         stage('Dependency scan - Trivy FS') {
             steps {
                 dir('app') {
-                    sh '''
-                      trivy fs --severity HIGH,CRITICAL .
-                    '''
+                    sh 'trivy fs --severity HIGH,CRITICAL .'
                 }
             }
         }
