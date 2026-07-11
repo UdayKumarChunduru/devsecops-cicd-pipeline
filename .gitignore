@@ -1,0 +1,16 @@
+target/
+*.class
+*.jar
+!.mvn/wrapper/*.jar
+.mvn/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+dependency-check-report.*
+trivy-report.*
+gitleaks-report.json
+.env
+*.pem
+lambda-package/
+falco_remediation.zip
