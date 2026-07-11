@@ -25,8 +25,7 @@ pipeline {
                     --no-git \
                     --source /repo \
                     --report-format json \
-                    --report-path /repo/gitleaks-report.json \
-                    --config /repo/.gitleaks.toml
+                    --report-path /repo/gitleaks-report.json
                 '''
             }
             post {
