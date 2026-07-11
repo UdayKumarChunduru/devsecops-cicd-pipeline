@@ -79,8 +79,8 @@ pipeline {
         stage('Image scan - Trivy') {
             steps {
                 sh '''
-                  trivy image --exit-code 1 --severity CRITICAL --no-progress $IMAGE
-                  trivy image --severity HIGH,MEDIUM --no-progress $IMAGE || true
+                  trivy image --timeout 15m --exit-code 1 --severity CRITICAL --no-progress $IMAGE
+                  trivy image --timeout 15m --severity HIGH,MEDIUM --no-progress $IMAGE || true
                 '''
             }
         }
