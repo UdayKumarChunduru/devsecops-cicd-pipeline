@@ -7,11 +7,13 @@ pipeline {
         SONAR_HOST_URL = 'http://sonarqube:9000'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
+        MAVEN_OPTS     = "-Dmaven.repo.local=/var/jenkins_home/.m2/repository"
     }
 
     options {
         timestamps()
         disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
     }
 
     stages {
@@ -35,11 +37,11 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                         dir('app') {
-                            sh 'mvn -B clean verify sonar:sonar -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=.'
+                            sh 'mvn clean verify sonar:sonar -B -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=. ${MAVEN_OPTS}'
                         }
                     }
                 }
-                timeout(time: 10, unit: 'MINUTES') {
+                timeout(time: 15, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -51,7 +53,7 @@ pipeline {
                     dir('app') {
                         sh '''
                           snyk auth $SNYK_TOKEN
-                          snyk test --severity-threshold=high
+                          snyk test --severity-threshold=high --maven-repo-path=/var/jenkins_home/.m2/repository
                         '''
                     }
                 }
