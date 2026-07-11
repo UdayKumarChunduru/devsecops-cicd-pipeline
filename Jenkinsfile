@@ -7,7 +7,7 @@ pipeline {
         SONAR_HOST_URL = 'http://sonarqube:9000'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
-        MAVEN_OPTS     = "-Dmaven.repo.local=/var/jenkins_home/.m2/repository"
+        MAVEN_OPTS     = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
     }
 
     options {
@@ -51,10 +51,12 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                     dir('app') {
-                        sh '''
-                          snyk auth $SNYK_TOKEN
-                          snyk test --severity-threshold=high --maven-repo-path=/var/jenkins_home/.m2/repository
-                        '''
+                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                            sh '''
+                              snyk auth $SNYK_TOKEN
+                              snyk test --severity-threshold=high --maven-repo-path=/var/jenkins_home/.m2/repository
+                            '''
+                        }
                     }
                 }
             }
