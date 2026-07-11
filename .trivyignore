@@ -1,0 +1,16 @@
+# .trivyignore
+#
+# Format: one CVE ID per line, optional trailing comment.
+# Entries here are permanently ignored by every trivy image scan in the
+# Jenkinsfile until removed.
+#
+# Process for adding an entry:
+# 1. The CVE must have no available fix upstream (Fixed Version: none in
+#    the trivy report), OR the fix requires a breaking major-version jump
+#    that is tracked as separate, deliberate work (not silently ignored).
+# 2. Add an expiry date in the comment — 90 days out — and revisit before
+#    then. An unfixable-today CVE may become fixable in that window.
+# 3. Only the project owner adds entries here; this file is not a place
+#    to silence CI failures under time pressure without justification.
+#
+# Currently empty — no CVE has been evaluated as unfixable yet.

@@ -1,9 +1,9 @@
 - rule: Privilege Escalation In Demo Container
-  desc: Detect sudo/su or chmod s inside demo-service pods
+  desc: Detect sudo/su or chmod +s inside demo-service pods
   condition: >
     spawned_process and container
     and k8s.pod.label[app] = "demo-service"
-    and (proc.name in (sudo, su) or proc.args contains "chmod s")
+    and (proc.name in (sudo, su) or proc.args contains "chmod +s")
   output: >
     Privilege escalation attempt
     user=%user.name command=%proc.cmdline pod=%k8s.pod.name ns=%k8s.ns.name
@@ -22,3 +22,27 @@
     file=%fd.name pod=%k8s.pod.name ns=%k8s.ns.name
   priority: CRITICAL
   tags: [container, filesystem]
+
+- rule: Shell Spawned In Demo Container
+  desc: Detect an interactive shell started inside the demo-service container
+  condition: >
+    spawned_process and container
+    and k8s.pod.label[app] = "demo-service"
+    and proc.name in (bash, sh, zsh, dash)
+  output: >
+    Shell spawned in container
+    user=%user.name shell=%proc.name parent=%proc.pname pod=%k8s.pod.name ns=%k8s.ns.name
+  priority: CRITICAL
+  tags: [container, shell]
+
+- rule: Unexpected Outbound Connection From Demo Container
+  desc: Detect outbound connections to non-standard ports from demo-service
+  condition: >
+    outbound and container
+    and k8s.pod.label[app] = "demo-service"
+    and not fd.sport in (8080, 443, 53)
+  output: >
+    Unexpected outbound connection
+    connection=%fd.name pod=%k8s.pod.name ns=%k8s.ns.name
+  priority: CRITICAL
+  tags: [container, network]

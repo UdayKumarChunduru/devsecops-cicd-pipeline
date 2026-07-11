@@ -83,9 +83,18 @@ pipeline {
         stage('Image scan - Trivy') {
             steps {
                 sh '''
-                  trivy image --timeout 15m --exit-code 1 --severity CRITICAL --no-progress $IMAGE
-                  trivy image --timeout 15m --severity HIGH,MEDIUM --no-progress $IMAGE || true
+                  trivy image --timeout 15m --exit-code 1 --severity CRITICAL --ignorefile .trivyignore --no-progress $IMAGE
+                  trivy image --timeout 15m --severity HIGH,MEDIUM --ignorefile .trivyignore --no-progress $IMAGE || true
                 '''
+            }
+        }
+
+        stage('Generate SBOM - Trivy') {
+            steps {
+                sh 'trivy image --format cyclonedx --output sbom-$IMAGE_TAG.json $IMAGE'
+            }
+            post {
+                always { archiveArtifacts artifacts: 'sbom-*.json', allowEmptyArchive: true }
             }
         }
 
