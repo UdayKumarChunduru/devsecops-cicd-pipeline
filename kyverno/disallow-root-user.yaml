@@ -12,6 +12,15 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - falco
+                - monitoring
+                - logging
       validate:
         message: "Pods must run as non-root. Set securityContext.runAsNonRoot true."
         pattern:

@@ -12,6 +12,15 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+                - falco
+                - monitoring
+                - logging
       validate:
         message: "All containers must set cpu and memory limits."
         pattern:
