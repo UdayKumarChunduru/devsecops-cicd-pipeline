@@ -50,8 +50,10 @@ pipeline {
 
         stage('Dependency scan - OWASP') {
             steps {
-                dir('app') {
-                    sh 'mvn -B org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7'
+                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                    dir('app') {
+                        sh 'mvn -B org.owasp:dependency-check-maven:check DnvdApiKey=$NVD_API_KEY -DfailBuildOnCVSS=7'
+                    }
                 }
             }
             post {
