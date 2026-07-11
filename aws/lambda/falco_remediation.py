@@ -28,7 +28,8 @@ def handler(event, context):
 
     for record in event.get("Records", []):
         try:
-            falco_event = json.loads(record["Sns"]["Message"])
+            sns_body = record["Sns"]["Message"]
+            falco_event = json.loads(sns_body)
         except (KeyError, json.JSONDecodeError):
             logger.warning("Skipping record, message is not valid Falco JSON")
             continue
@@ -42,13 +43,19 @@ def handler(event, context):
             logger.warning("Critical event without a pod name, nothing to do")
             continue
 
-        api.delete_namespaced_pod(name=pod, namespace=namespace)
-
-        logger.info(
-            "Terminated pod %s in %s. Rule: %s. Output: %s",
-            pod, namespace,
-            falco_event.get("rule"),
-            falco_event.get("output"),
-        )
+        try:
+            api.delete_namespaced_pod(name=pod, namespace=namespace)
+            logger.info(
+                "Deleted pod %s in %s. Rule: %s. Output: %s",
+                pod, namespace,
+                falco_event.get("rule"),
+                falco_event.get("output"),
+            )
+        except client.ApiException as exc:
+            if exc.status == 404:
+                logger.info("Pod %s in %s already gone, nothing to do", pod, namespace)
+            else:
+                logger.error("Failed to delete pod %s in %s: %s", pod, namespace, exc)
+                raise
 
     return {"status": "ok"}
