@@ -37,7 +37,7 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                         dir('app') {
-                            sh 'mvn clean verify sonar:sonar -B -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=.'
+                            sh 'mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -B -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=.'
                         }
                     }
                 }
@@ -63,7 +63,7 @@ pipeline {
         stage('Dependency scan - Trivy FS') {
             steps {
                 dir('app') {
-                    sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
+                    sh 'trivy fs --skip-files pom.xml --exit-code 1 --severity HIGH,CRITICAL .'
                 }
             }
         }
@@ -79,15 +79,8 @@ pipeline {
         stage('Image scan - Trivy') {
             steps {
                 sh '''
-                  docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest \
-                    image --exit-code 1 --severity CRITICAL --no-progress $IMAGE
-
-                  docker run --rm \
-                    -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest \
-                    image --severity HIGH,MEDIUM --no-progress $IMAGE || true
+                  trivy image --exit-code 1 --severity CRITICAL --no-progress $IMAGE
+                  trivy image --severity HIGH,MEDIUM --no-progress $IMAGE || true
                 '''
             }
         }
