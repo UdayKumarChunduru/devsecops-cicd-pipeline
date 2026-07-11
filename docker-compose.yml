@@ -7,6 +7,7 @@ services:
     container_name: jenkins
     user: root
     mem_limit: 3g
+    cpus: 2.0
     ports:
       - "8080:8080"
       - "50000:50000"
@@ -22,6 +23,8 @@ services:
   sonarqube:
     image: sonarqube:26.3.0.120487-community
     container_name: sonarqube
+    mem_limit: 2g
+    cpus: 1.5
     ports:
       - "9000:9000"
     environment:
@@ -34,6 +37,8 @@ services:
   nexus:
     image: sonatype/nexus3:latest
     container_name: nexus
+    mem_limit: 2g
+    cpus: 1.0
     ports:
       - "8081:8081"
       - "8082:8082"
