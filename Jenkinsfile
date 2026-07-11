@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         APP_NAME       = 'demo-service'
-        NEXUS_REGISTRY = 'nexus:8082'
+        NEXUS_REGISTRY = 'localhost:8082'
         SONAR_HOST_URL = 'http://sonarqube:9000'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
