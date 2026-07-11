@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         APP_NAME       = 'demo-service'
-        NEXUS_REGISTRY = 'localhost:8082'
+        NEXUS_REGISTRY = 'nexus:8082'
         SONAR_HOST_URL = 'http://sonarqube:9000'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
@@ -18,9 +18,15 @@ pipeline {
         stage('Secret scan - Gitleaks') {
             steps {
                 sh '''
-                  docker run --rm -v "$WORKSPACE:/repo" zricethezav/gitleaks:latest \
-                    detect --source /repo --report-format json \
-                    --report-path /repo/gitleaks-report.json
+                  docker run --rm \
+                    -v "$WORKSPACE:/repo" \
+                    zricethezav/gitleaks:latest \
+                    detect \
+                    --no-git \
+                    --source /repo \
+                    --report-format json \
+                    --report-path /repo/gitleaks-report.json \
+                    --config /repo/.gitleaks.toml
                 '''
             }
             post {
@@ -32,7 +38,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     dir('app') {
-                        sh 'mvn -B clean verify sonar:sonar -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN'
+                        sh 'mvn -B clean verify sonar:sonar -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.projectBaseDir=.'
                     }
                 }
                 timeout(time: 10, unit: 'MINUTES') {
@@ -44,7 +50,6 @@ pipeline {
         stage('Dependency scan - OWASP') {
             steps {
                 dir('app') {
-                    // fail at CVSS 7 and above
                     sh 'mvn -B org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7'
                 }
             }
@@ -58,8 +63,12 @@ pipeline {
                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                     dir('app') {
                         sh '''
-                          docker run --rm -e SNYK_TOKEN -v "$PWD:/project" -w /project \
-                            snyk/snyk:maven snyk test --severity-threshold=high
+                          docker run --rm \
+                            -e SNYK_TOKEN \
+                            -v "$PWD:/project" \
+                            -w /project \
+                            snyk/snyk:maven \
+                            snyk test --severity-threshold=high
                         '''
                     }
                 }
@@ -76,13 +85,16 @@ pipeline {
 
         stage('Image scan - Trivy') {
             steps {
-                // zero-Critical policy: exit code 1 on any CRITICAL finding
                 sh '''
-                  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest image --exit-code 1 --severity CRITICAL \
-                    --no-progress $IMAGE
-                  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                    aquasec/trivy:latest image --severity HIGH,MEDIUM --no-progress $IMAGE || true
+                  docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    aquasec/trivy:latest \
+                    image --exit-code 1 --severity CRITICAL --no-progress $IMAGE
+
+                  docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    aquasec/trivy:latest \
+                    image --severity HIGH,MEDIUM --no-progress $IMAGE || true
                 '''
             }
         }
@@ -96,6 +108,12 @@ pipeline {
                       docker logout $NEXUS_REGISTRY
                     '''
                 }
+            }
+        }
+
+        stage('Load image into kind') {
+            steps {
+                sh 'kind load docker-image $IMAGE --name devsecops'
             }
         }
 
