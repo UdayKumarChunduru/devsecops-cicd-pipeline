@@ -1,0 +1,9 @@
+falcosidekick:
+  enabled: true
+  config:
+    aws:
+      region: us-east-1
+      sns:
+        topicarn: arn:aws:sns:us-east-1:123456789012:devsecops-pipeline-alerts
+        minimumpriority: critical
+        rawjson: true
