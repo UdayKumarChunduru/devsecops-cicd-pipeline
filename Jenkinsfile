@@ -48,19 +48,6 @@ pipeline {
             }
         }
 
-        stage('Dependency scan - OWASP') {
-            steps {
-                withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
-                    dir('app') {
-                        sh 'mvn -B org.owasp:dependency-check-maven:check -DnvdApiKey=$NVD_API_KEY -Dnoupdate -DdataDirectory=/var/jenkins_home/dependency-check-data -DfailBuildOnCVSS=7'
-                    }
-                }
-            }
-            post {
-                always { archiveArtifacts artifacts: 'app/target/dependency-check-report.html', allowEmptyArchive: true }
-            }
-        }
-
         stage('Dependency scan - Snyk') {
             steps {
                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
@@ -74,6 +61,16 @@ pipeline {
                             snyk test --severity-threshold=high
                         '''
                     }
+                }
+            }
+        }
+
+        stage('Dependency scan - Trivy FS') {
+            steps {
+                dir('app') {
+                    sh '''
+                      trivy fs --severity HIGH,CRITICAL .
+                    '''
                 }
             }
         }
