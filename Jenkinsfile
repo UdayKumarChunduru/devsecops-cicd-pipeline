@@ -48,6 +48,22 @@ pipeline {
             }
         }
 
+        stage('Debug Snyk Mount') {
+            steps {
+                dir('app') {
+                    sh '''
+                        pwd
+                        ls -la
+
+                        docker run --rm \
+                          -v "$PWD":/project \
+                          alpine:latest \
+                          sh -c "ls -la /project && find /project -name pom.xml"
+                    '''
+                }
+            }
+        }
+
         stage('Dependency scan - Snyk') {
             steps {
                 withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
