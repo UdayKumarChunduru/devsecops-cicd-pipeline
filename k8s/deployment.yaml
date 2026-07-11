@@ -21,7 +21,6 @@ spec:
       containers:
         - name: demo-service
           image: IMAGE_PLACEHOLDER
-          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           resources:
