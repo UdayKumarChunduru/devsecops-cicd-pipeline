@@ -7,7 +7,6 @@ pipeline {
         SONAR_HOST_URL = 'http://sonarqube:9000'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
-        MAVEN_OPTS     = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
     }
 
     options {
