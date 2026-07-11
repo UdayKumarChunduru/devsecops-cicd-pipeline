@@ -1,9 +1,9 @@
 - rule: Privilege Escalation In Demo Container
-  desc: Detect sudo/su or chmod +s inside demo-service pods
+  desc: Detect sudo/su or chmod s inside demo-service pods
   condition: >
     spawned_process and container
     and k8s.pod.label[app] = "demo-service"
-    and (proc.name in (sudo, su) or proc.args contains "chmod +s")
+    and (proc.name in (sudo, su) or proc.args contains "chmod s")
   output: >
     Privilege escalation attempt
     user=%user.name command=%proc.cmdline pod=%k8s.pod.name ns=%k8s.ns.name
