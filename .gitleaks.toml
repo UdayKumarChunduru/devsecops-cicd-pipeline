@@ -1,5 +1,6 @@
-[allowlist]
-  paths = [
-    '''.env''',
-    '''jenkins-kubeconfig.yaml'''
-  ]
+# No filename-based allowlisting. Filename allowlists create a blind spot:
+# any secret committed under an allowlisted filename goes undetected forever,
+# which is exactly how jenkins-kubeconfig.yaml sat in this repo's history
+# unnoticed. Sensitive local-only files are handled by keeping them out of
+# git entirely (see .gitignore) rather than by telling gitleaks to stop
+# looking at them.
