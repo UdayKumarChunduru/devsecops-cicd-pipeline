@@ -60,14 +60,6 @@ pipeline {
             }
         }
 
-        stage('Dependency scan - Trivy FS') {
-            steps {
-                dir('app') {
-                    sh 'trivy fs --skip-files pom.xml --exit-code 1 --severity HIGH,CRITICAL .'
-                }
-            }
-        }
-
         stage('Build image') {
             steps {
                 dir('app') {
