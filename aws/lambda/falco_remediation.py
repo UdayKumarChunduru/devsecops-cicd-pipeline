@@ -42,11 +42,10 @@ def handler(event, context):
             logger.warning("Critical event without a pod name, nothing to do")
             continue
 
-        patch = {"metadata": {"labels": {"quarantine": "true"}}}
-        api.patch_namespaced_pod(name=pod, namespace=namespace, body=patch)
+        api.delete_namespaced_pod(name=pod, namespace=namespace)
 
         logger.info(
-            "Quarantined pod %s in %s. Rule: %s. Output: %s",
+            "Terminated pod %s in %s. Rule: %s. Output: %s",
             pod, namespace,
             falco_event.get("rule"),
             falco_event.get("output"),
