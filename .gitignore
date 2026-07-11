@@ -14,3 +14,4 @@ gitleaks-report.json
 *.pem
 lambda-package/
 falco_remediation.zip
+jenkins-kubeconfig.yaml
