@@ -1,0 +1,25 @@
+FROM jenkins/jenkins:lts-jdk21
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y \
+      curl \
+      git \
+      maven \
+      docker.io && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -sLO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/
+
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+RUN curl -sLo /usr/local/bin/kind \
+    https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64 && \
+    chmod +x /usr/local/bin/kind
+
+RUN git config --system --add safe.directory '*'
+
+USER jenkins
