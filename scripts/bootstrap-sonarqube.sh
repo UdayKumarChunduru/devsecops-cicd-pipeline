@@ -15,7 +15,7 @@ step()  { echo ""; echo "=================================================="; ec
 step "sonarqube admin password"
 SONAR_ADMIN_PASSWORD=$(get_env_var SONAR_ADMIN_PASSWORD)
 if [ -z "$SONAR_ADMIN_PASSWORD" ]; then
-  SONAR_ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
+  SONAR_ADMIN_PASSWORD=$(generate_strong_password)
   set_env_var SONAR_ADMIN_PASSWORD "$SONAR_ADMIN_PASSWORD"
   info "generated a new sonarqube admin password"
 fi

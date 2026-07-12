@@ -19,7 +19,7 @@ fi
 
 JENKINS_ADMIN_PASSWORD=$(get_env_var JENKINS_ADMIN_PASSWORD)
 if [ -z "$JENKINS_ADMIN_PASSWORD" ]; then
-  JENKINS_ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)
+  JENKINS_ADMIN_PASSWORD=$(generate_strong_password)
   set_env_var JENKINS_ADMIN_PASSWORD "$JENKINS_ADMIN_PASSWORD"
   info "generated a new jenkins admin password"
 else
