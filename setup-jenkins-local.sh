@@ -9,6 +9,18 @@ pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
 info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 step()  { echo ""; echo "=================================================="; echo "STEP: $1"; echo "=================================================="; }
 
+step "checking env file"
+if [ -f .env ]; then
+  pass ".env already exists, leaving it as is"
+else
+  info ".env not found, generating it now"
+  cat > .env << ENVEOF
+JENKINS_AGENT_SECRET=unused
+PIPELINE_REPO_PATH=$(pwd)
+ENVEOF
+  pass ".env created with pipeline_repo_path set to $(pwd)"
+fi
+
 step "starting jenkins and sonarqube containers"
 docker compose up -d --build jenkins sonarqube
 
