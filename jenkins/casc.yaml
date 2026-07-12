@@ -17,8 +17,6 @@ unclassified:
   location:
     adminAddress: devsecops-pipeline@local
     url: http://localhost:8080/
-  mailer:
-    adminAddress: devsecops-pipeline@local
   sonarGlobalConfiguration:
     buildWrapperEnabled: true
     installations:
