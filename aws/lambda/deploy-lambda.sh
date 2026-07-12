@@ -20,15 +20,18 @@ cp "$HERE/falco_remediation.py" "$PKG_DIR/"
 if aws lambda get-function --function-name "$FUNC_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
   aws lambda update-function-code --function-name "$FUNC_NAME" \
     --zip-file fileb://falco_remediation.zip --region "$AWS_REGION"
+  aws lambda wait function-updated-v2 --function-name "$FUNC_NAME" --region "$AWS_REGION"
 else
   aws lambda create-function --function-name "$FUNC_NAME" \
     --runtime python3.12 --handler falco_remediation.handler \
     --role "$LAMBDA_ROLE_ARN" --timeout 30 --memory-size 256 \
     --zip-file fileb://falco_remediation.zip --region "$AWS_REGION"
+  aws lambda wait function-active-v2 --function-name "$FUNC_NAME" --region "$AWS_REGION"
 fi
 
 aws lambda update-function-configuration --function-name "$FUNC_NAME" \
-  --environment "Variables={EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME},AWS_REGION=${AWS_REGION},TARGET_NAMESPACE=default}" \
+  --environment "Variables={EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME},TARGET_NAMESPACE=default}" \
   --region "$AWS_REGION"
+aws lambda wait function-updated-v2 --function-name "$FUNC_NAME" --region "$AWS_REGION"
 
 echo "Lambda $FUNC_NAME deployed against $EKS_CLUSTER_NAME. Now run aws/sns/sns-setup.sh."
