@@ -9,9 +9,15 @@ jenkins:
           password: ${JENKINS_ADMIN_PASSWORD}
   authorizationStrategy:
     globalMatrix:
-      permissions:
-        - "Overall/Administer:${JENKINS_ADMIN_USER}"
-        - "Overall/Read:authenticated"
+      entries:
+        - user:
+            name: "${JENKINS_ADMIN_USER}"
+            permissions:
+              - "Overall/Administer"
+        - group:
+            name: "authenticated"
+            permissions:
+              - "Overall/Read"
 
 unclassified:
   location:
