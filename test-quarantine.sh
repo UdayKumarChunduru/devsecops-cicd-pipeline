@@ -17,9 +17,40 @@ step "checking for a running demo-service pod"
 if ! kubectl get deployment demo-service -n default >/dev/null 2>&1; then
   info "demo-service deployment not found, deploying it now with a placeholder image"
   info "no image has been pushed to ecr yet on this branch, using nginx as a stand in target for this test"
-  kubectl create deployment demo-service --image=nginx --replicas=2 -n default --dry-run=client -o yaml | \
-    kubectl label --local -f - app=demo-service quarantine=false -o yaml | \
-    kubectl apply -f -
+  info "spec includes runAsNonRoot and resource limits to satisfy kyverno policies"
+  cat << YAML | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-service
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo-service
+  template:
+    metadata:
+      labels:
+        app: demo-service
+        quarantine: "false"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+      containers:
+        - name: demo-service
+          image: nginxinc/nginx-unprivileged:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+YAML
   kubectl rollout status deployment/demo-service -n default --timeout=120s
 fi
 
