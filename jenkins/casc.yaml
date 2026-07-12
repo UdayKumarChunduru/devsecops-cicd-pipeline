@@ -53,5 +53,19 @@ credentials:
               description: aws-jenkins-creds
 
 jobs:
-  - script: >
-      readFileFromWorkspace('job-dsl.groovy')
+  - script: |
+      pipelineJob('devsecops-pipeline') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/UdayKumarChunduru/devsecops-cicd-pipeline.git')
+                }
+                branch('*/aws')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }

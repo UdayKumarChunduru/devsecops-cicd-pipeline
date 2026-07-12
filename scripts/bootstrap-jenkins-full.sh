@@ -64,14 +64,21 @@ step "building and starting jenkins with casc"
 docker compose up -d --build jenkins
 
 step "waiting for jenkins to respond"
+JENKINS_UP=false
 for i in $(seq 1 30); do
   if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/login | grep -q 200; then
     pass "jenkins is up"
+    JENKINS_UP=true
     break
   fi
   info "waiting, check $i of 30"
   sleep 5
 done
+if [ "$JENKINS_UP" = false ]; then
+  fail "jenkins did not come up after 150 seconds, dumping recent logs"
+  docker logs jenkins --tail 50
+  exit 1
+fi
 
 step "jenkins admin credentials"
 JENKINS_ADMIN_USER=$(get_env_var JENKINS_ADMIN_USER)
