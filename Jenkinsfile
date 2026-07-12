@@ -2,12 +2,15 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME       = 'demo-service'
-        NEXUS_REGISTRY = 'localhost:8082'
-        SONAR_HOST_URL = 'http://sonarqube:9000'
-        IMAGE_TAG      = "${env.BUILD_NUMBER}"
-        IMAGE          = "${NEXUS_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
-        MAVEN_OPTS     = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
+        APP_NAME        = 'demo-service'
+        AWS_REGION      = 'us-east-1'
+        AWS_ACCOUNT_ID  = credentials('aws-account-id')
+        ECR_REGISTRY    = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        SONAR_HOST_URL  = 'http://sonarqube:9000'
+        IMAGE_TAG       = "${env.BUILD_NUMBER}"
+        IMAGE           = "${ECR_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
+        MAVEN_OPTS      = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
+        EKS_CLUSTER_NAME = 'devsecops-real'
     }
 
     options {
@@ -98,31 +101,26 @@ pipeline {
             }
         }
 
-        stage('Push to Nexus') {
+        stage('Push to ECR') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
-                      echo "$NEXUS_PASS" | docker login $NEXUS_REGISTRY -u "$NEXUS_USER" --password-stdin
+                      aws ecr get-login-password --region $AWS_REGION | \
+                        docker login --username AWS --password-stdin $ECR_REGISTRY
                       docker push $IMAGE
-                      docker logout $NEXUS_REGISTRY
                     '''
                 }
             }
         }
 
-        stage('Load image into kind') {
+        stage('Deploy to EKS') {
             steps {
-                sh 'kind load docker-image $IMAGE --name devsecops'
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
-                      sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment.yaml | kubectl apply -f -
+                      aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+                      sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment-eks.yaml | kubectl apply -f -
                       kubectl apply -f k8s/service.yaml
-                      kubectl rollout status deployment/demo-service --timeout=120s
+                      kubectl rollout status deployment/demo-service --timeout=180s
                     '''
                 }
             }
