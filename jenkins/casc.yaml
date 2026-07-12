@@ -22,7 +22,7 @@ jenkins:
 unclassified:
   location:
     adminAddress: devsecops-pipeline@local
-    url: http://localhost:8080/
+    url: http://jenkins:8080/
   sonarGlobalConfiguration:
     buildWrapperEnabled: true
     installations:
