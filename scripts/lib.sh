@@ -11,5 +11,7 @@ set_env_var() {
 
 get_env_var() {
   key=$1
-  grep "^${key}=" .env 2>/dev/null | cut -d '=' -f2-
+  touch .env
+  value=$(grep "^${key}=" .env | cut -d '=' -f2-) || true
+  echo "$value"
 }
