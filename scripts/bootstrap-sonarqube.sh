@@ -25,14 +25,23 @@ LOGIN_CHECK=$(curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" http://localhost:9000/a
 if echo "$LOGIN_CHECK" | grep -q '"valid":true'; then
   pass "admin password already set correctly, skipping change"
 else
-  info "default admin credentials still active, changing password now"
-  curl -s -u admin:admin -X POST "http://localhost:9000/api/users/change_password" \
-    -d "login=admin&previousPassword=admin&password=${SONAR_ADMIN_PASSWORD}" >/dev/null
+  info "checking if default admin credentials still work"
+  DEFAULT_CHECK=$(curl -s -u admin:admin http://localhost:9000/api/authentication/validate)
+  info "default credential check response: $DEFAULT_CHECK"
+  if ! echo "$DEFAULT_CHECK" | grep -q '"valid":true'; then
+    fail "neither the stored password nor the default admin:admin credential is valid, sonarqube admin password is in an unknown state, check the sonarqube ui manually at http://localhost:9000"
+    exit 1
+  fi
+  info "default credentials confirmed valid, attempting password change"
+  CHANGE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -u admin:admin -X POST "http://localhost:9000/api/users/change_password" \
+    -d "login=admin&previousPassword=admin&password=${SONAR_ADMIN_PASSWORD}")
+  info "change password response: $CHANGE_RESPONSE"
   CONFIRM=$(curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" http://localhost:9000/api/authentication/validate)
+  info "post change validate response: $CONFIRM"
   if echo "$CONFIRM" | grep -q '"valid":true'; then
     pass "admin password changed"
   else
-    fail "password change did not take effect"
+    fail "password change did not take effect, see responses above"
     exit 1
   fi
 fi
