@@ -1,0 +1,12 @@
+falcosidekick:
+  enabled: true
+  serviceAccount:
+    create: false
+    name: falcosidekick
+  config:
+    aws:
+      region: us-east-1
+      sns:
+        topicarn: ""
+        minimumpriority: critical
+        rawjson: true
