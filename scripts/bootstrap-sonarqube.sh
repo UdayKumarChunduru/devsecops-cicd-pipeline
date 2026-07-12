@@ -21,14 +21,20 @@ if [ -z "$SONAR_ADMIN_PASSWORD" ]; then
 fi
 
 step "checking sonarqube admin credential state"
-LOGIN_CHECK=$(curl -s -o /dev/null -w "%{http_code}" -u "admin:${SONAR_ADMIN_PASSWORD}" http://localhost:9000/api/authentication/validate)
-if [ "$LOGIN_CHECK" = "200" ]; then
+LOGIN_CHECK=$(curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" http://localhost:9000/api/authentication/validate)
+if echo "$LOGIN_CHECK" | grep -q '"valid":true'; then
   pass "admin password already set correctly, skipping change"
 else
   info "default admin credentials still active, changing password now"
   curl -s -u admin:admin -X POST "http://localhost:9000/api/users/change_password" \
     -d "login=admin&previousPassword=admin&password=${SONAR_ADMIN_PASSWORD}" >/dev/null
-  pass "admin password changed"
+  CONFIRM=$(curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" http://localhost:9000/api/authentication/validate)
+  if echo "$CONFIRM" | grep -q '"valid":true'; then
+    pass "admin password changed"
+  else
+    fail "password change did not take effect"
+    exit 1
+  fi
 fi
 
 step "sonarqube token for jenkins"
@@ -38,7 +44,16 @@ curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" -X POST "http://localhost:9000/api/us
 TOKEN_RESPONSE=$(curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" -X POST "http://localhost:9000/api/user_tokens/generate" \
   -d "name=jenkins")
 
-SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "
+import sys, json
+try:
+    print(json.load(sys.stdin)['token'])
+except Exception:
+    sys.exit(1)
+" 2>/dev/null) || {
+  fail "token generation failed, response was: $TOKEN_RESPONSE"
+  exit 1
+}
 if [ -z "$SONAR_TOKEN" ]; then
   fail "token generation did not return a token"
   exit 1
