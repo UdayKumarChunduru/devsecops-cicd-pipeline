@@ -15,17 +15,10 @@ metadata:
   name: falco-remediator-binding
   namespace: default
 subjects:
-  - kind: ServiceAccount
-    name: falco-remediator
-    namespace: default
+  - kind: Group
+    name: falco-remediator-group
+    apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: Role
   name: falco-remediator
   apiGroup: rbac.authorization.k8s.io
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: falco-remediator
-  namespace: default
