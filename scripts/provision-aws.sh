@@ -263,6 +263,12 @@ echo "provisioning complete"
 echo "run eksctl delete cluster -f eks/cluster.yaml when done testing"
 echo "=================================================="
 
+step "starting jenkins and sonarqube locally"
+bash scripts/setup-jenkins-local.sh
+
+step "provisioning scoped jenkins iam user"
+bash scripts/setup-jenkins-iam.sh
+
 step "running end to end quarantine test"
-bash test-quarantine.sh
+bash scripts/test-quarantine.sh
 echo "=================================================="
