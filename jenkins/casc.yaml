@@ -1,0 +1,47 @@
+jenkins:
+  systemMessage: devsecops pipeline controller
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: ${JENKINS_ADMIN_USER}
+          password: ${JENKINS_ADMIN_PASSWORD}
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:${JENKINS_ADMIN_USER}"
+        - "Overall/Read:authenticated"
+
+unclassified:
+  sonarGlobalConfiguration:
+    installations:
+      - name: SonarQube
+        serverUrl: http://sonarqube:9000
+        credentialsId: sonar-token
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: sonar-token
+              secret: ${SONAR_TOKEN}
+              description: sonar-token
+          - string:
+              scope: GLOBAL
+              id: snyk-token
+              secret: ${SNYK_TOKEN}
+              description: snyk-token
+          - string:
+              scope: GLOBAL
+              id: aws-account-id
+              secret: ${AWS_ACCOUNT_ID}
+              description: aws-account-id
+          - aws:
+              scope: GLOBAL
+              id: aws-jenkins-creds
+              accessKey: ${AWS_JENKINS_ACCESS_KEY_ID}
+              secretKey: ${AWS_JENKINS_SECRET_ACCESS_KEY}
+              description: aws-jenkins-creds

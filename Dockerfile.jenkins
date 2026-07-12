@@ -39,4 +39,7 @@ RUN curl -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/down
 
 RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version && python3 --version && pip3 --version
 
+COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
 USER jenkins

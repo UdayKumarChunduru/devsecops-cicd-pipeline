@@ -11,13 +11,17 @@ services:
     ports:
       - "8080:8080"
       - "50000:50000"
+    env_file:
+      - .env
     environment:
-      - JAVA_OPTS=-Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
+      - JAVA_OPTS=-Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true -Djenkins.install.runSetupWizard=false
+      - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
     volumes:
       - jenkins_home:/var/jenkins_home
       - maven_repo:/var/jenkins_home/.m2/repository
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PIPELINE_REPO_PATH}:/var/jenkins_home/devsecops-cicd-pipeline:ro
+      - ./jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro
     restart: unless-stopped
 
   sonarqube:

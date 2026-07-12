@@ -47,16 +47,25 @@ else
 fi
 
 step "access key"
+source scripts/lib.sh
+EXISTING_IN_ENV=$(get_env_var AWS_JENKINS_ACCESS_KEY_ID)
 EXISTING_KEYS=$(aws iam list-access-keys --user-name "$USER_NAME" --query "AccessKeyMetadata[].AccessKeyId" --output text)
-if [ -n "$EXISTING_KEYS" ]; then
-  info "user already has an access key, skipping creation"
-  info "existing key ids: $EXISTING_KEYS"
-  info "if you need the secret again it cannot be retrieved, delete the old key and rerun this script to get a fresh one"
+if [ -n "$EXISTING_IN_ENV" ] && [ -n "$EXISTING_KEYS" ]; then
+  pass "access key already provisioned and saved in .env"
+elif [ -n "$EXISTING_KEYS" ] && [ -z "$EXISTING_IN_ENV" ]; then
+  info "iam access key exists but is not in .env, deleting and creating a fresh one since the old secret cannot be retrieved"
+  for KEY_ID in $EXISTING_KEYS; do
+    aws iam delete-access-key --user-name "$USER_NAME" --access-key-id "$KEY_ID"
+  done
+  KEY_JSON=$(aws iam create-access-key --user-name "$USER_NAME" --output json)
+  set_env_var AWS_JENKINS_ACCESS_KEY_ID "$(echo "$KEY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['AccessKey']['AccessKeyId'])")"
+  set_env_var AWS_JENKINS_SECRET_ACCESS_KEY "$(echo "$KEY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['AccessKey']['SecretAccessKey'])")"
+  pass "access key created and saved in .env"
 else
-  aws iam create-access-key --user-name "$USER_NAME" --output json > /tmp/jenkins-iam-key.json
-  pass "access key created, printed once below, save it now"
-  cat /tmp/jenkins-iam-key.json
-  rm -f /tmp/jenkins-iam-key.json
+  KEY_JSON=$(aws iam create-access-key --user-name "$USER_NAME" --output json)
+  set_env_var AWS_JENKINS_ACCESS_KEY_ID "$(echo "$KEY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['AccessKey']['AccessKeyId'])")"
+  set_env_var AWS_JENKINS_SECRET_ACCESS_KEY "$(echo "$KEY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['AccessKey']['SecretAccessKey'])")"
+  pass "access key created and saved in .env"
 fi
 
 step "eks aws-auth mapping"
@@ -103,8 +112,10 @@ roleRef:
 YAML
 pass "jenkins deploy role and binding applied"
 
+source scripts/lib.sh
+set_env_var AWS_ACCOUNT_ID "$(aws sts get-caller-identity --query Account --output text)"
+
 echo ""
 echo "=================================================="
-echo "jenkins iam user ready, use the printed access key and secret for the aws-jenkins-creds credential in jenkins"
-echo "account id for the aws-account-id credential: $(aws sts get-caller-identity --query Account --output text)"
+echo "jenkins iam user ready, access key and account id saved to .env, casc will inject them into jenkins credentials on next container start"
 echo "=================================================="

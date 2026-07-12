@@ -1,0 +1,13 @@
+configuration-as-code
+matrix-auth
+git
+workflow-aggregator
+pipeline-stage-view
+docker-workflow
+sonar
+aws-credentials
+credentials-binding
+plain-credentials
+credentials
+timestamper
+ws-cleanup
