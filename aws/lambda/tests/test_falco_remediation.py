@@ -147,7 +147,7 @@ def test_get_eks_bearer_token_produces_k8s_aws_v1_prefix(monkeypatch):
         mock_session.get_credentials.return_value = MagicMock()
         mock_get_session.return_value = mock_session
 
-        with patch("botocore.signers.RequestSigner") as mock_signer_cls:
+        with patch("falco_remediation.RequestSigner") as mock_signer_cls:
             mock_signer = MagicMock()
             mock_signer.generate_presigned_url.return_value = (
                 "https://sts.us-east-1.amazonaws.com/?Action=GetCallerIdentity"
