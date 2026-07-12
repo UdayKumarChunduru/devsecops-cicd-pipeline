@@ -262,3 +262,7 @@ echo "=================================================="
 echo "provisioning complete"
 echo "run eksctl delete cluster -f eks/cluster.yaml when done testing"
 echo "=================================================="
+
+step "running end to end quarantine test"
+bash test-quarantine.sh
+echo "=================================================="
