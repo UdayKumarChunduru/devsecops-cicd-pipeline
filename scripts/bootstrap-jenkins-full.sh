@@ -45,9 +45,15 @@ step "checking snyk token"
 source scripts/lib.sh
 SNYK_EXISTING=$(get_env_var SNYK_TOKEN)
 if [ -z "$SNYK_EXISTING" ]; then
-  echo "snyk token not found in .env"
-  read -p "paste snyk token now: " SNYK_VALUE
-  set_env_var SNYK_TOKEN "$SNYK_VALUE"
+  if [ -t 0 ]; then
+    echo "snyk token not found in .env"
+    read -p "paste snyk token now: " SNYK_VALUE
+    set_env_var SNYK_TOKEN "$SNYK_VALUE"
+  else
+    fail "snyk token not found in .env and no terminal attached to prompt for one"
+    info "set it before running this script: echo SNYK_TOKEN=your-token-here >> .env"
+    exit 1
+  fi
 fi
 pass "snyk token present"
 
@@ -73,7 +79,10 @@ JENKINS_ADMIN_PASSWORD=$(get_env_var JENKINS_ADMIN_PASSWORD)
 info "username: $JENKINS_ADMIN_USER"
 info "password stored in .env under JENKINS_ADMIN_PASSWORD, not printed here"
 
+step "triggering pipeline build"
+bash scripts/trigger-build.sh
+
 echo ""
 echo "=================================================="
-echo "jenkins ready at http://localhost:8080 with credentials sonar-token snyk-token aws-account-id aws-jenkins-creds already provisioned via casc"
+echo "jenkins ready at http://localhost:8080, devsecops-pipeline job created and triggered automatically"
 echo "=================================================="

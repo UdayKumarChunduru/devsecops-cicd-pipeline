@@ -14,7 +14,13 @@ jenkins:
         - "Overall/Read:authenticated"
 
 unclassified:
+  location:
+    adminAddress: devsecops-pipeline@local
+    url: http://localhost:8080/
+  mailer:
+    adminAddress: devsecops-pipeline@local
   sonarGlobalConfiguration:
+    buildWrapperEnabled: true
     installations:
       - name: SonarQube
         serverUrl: http://sonarqube:9000
@@ -45,3 +51,7 @@ credentials:
               accessKey: ${AWS_JENKINS_ACCESS_KEY_ID}
               secretKey: ${AWS_JENKINS_SECRET_ACCESS_KEY}
               description: aws-jenkins-creds
+
+jobs:
+  - script: >
+      readFileFromWorkspace('job-dsl.groovy')

@@ -11,3 +11,4 @@ plain-credentials
 credentials
 timestamper
 ws-cleanup
+job-dsl

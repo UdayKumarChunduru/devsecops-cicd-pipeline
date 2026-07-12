@@ -22,6 +22,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PIPELINE_REPO_PATH}:/var/jenkins_home/devsecops-cicd-pipeline:ro
       - ./jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro
+      - ./jenkins/job-dsl.groovy:/var/jenkins_home/job-dsl.groovy:ro
     restart: unless-stopped
 
   sonarqube:
