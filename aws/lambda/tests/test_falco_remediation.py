@@ -13,8 +13,8 @@ def _sns_event(*records):
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.setenv("KUBE_API_SERVER", "https://fake-api-server:6443")
-    monkeypatch.setenv("KUBE_SA_TOKEN", "fake-token")
+    monkeypatch.setenv("EKS_CLUSTER_NAME", "devsecops-real")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
 
 
 @pytest.fixture
@@ -31,9 +31,7 @@ def test_non_critical_event_is_ignored(mock_api):
         "rule": "Some Non Critical Rule",
         "output_fields": {"k8s.pod.name": "demo-service-abc", "k8s.ns.name": "default"},
     })
-
     result = falco_remediation.handler(event, None)
-
     mock_api.delete_namespaced_pod.assert_not_called()
     assert result == {"status": "ok"}
 
@@ -44,9 +42,7 @@ def test_missing_pod_name_does_not_crash(mock_api):
         "rule": "Privilege Escalation In Demo Container",
         "output_fields": {"k8s.ns.name": "default"},
     })
-
     result = falco_remediation.handler(event, None)
-
     mock_api.delete_namespaced_pod.assert_not_called()
     assert result == {"status": "ok"}
 
@@ -60,9 +56,7 @@ def test_wellformed_event_extracts_pod_and_namespace(mock_api):
             "k8s.ns.name": "default",
         },
     })
-
     falco_remediation.handler(event, None)
-
     mock_api.delete_namespaced_pod.assert_called_once_with(
         name="demo-service-5647db499-57mmn", namespace="default"
     )
@@ -100,9 +94,7 @@ def test_pod_already_gone_404_is_handled_gracefully(mock_api):
         "rule": "Sensitive File Read In Demo Container",
         "output_fields": {"k8s.pod.name": "demo-service-gone", "k8s.ns.name": "default"},
     })
-
     result = falco_remediation.handler(event, None)
-
     assert result == {"status": "ok"}
 
 
@@ -115,10 +107,8 @@ def test_unexpected_api_error_is_re_raised(mock_api):
         "rule": "Privilege Escalation In Demo Container",
         "output_fields": {"k8s.pod.name": "demo-service-abc", "k8s.ns.name": "default"},
     })
-
     with pytest.raises(k8s_client.ApiException) as exc_info:
         falco_remediation.handler(event, None)
-
     assert exc_info.value.status == 403
 
 
@@ -133,9 +123,7 @@ def test_malformed_sns_message_does_not_block_other_records(mock_api):
             })}},
         ]
     }
-
     result = falco_remediation.handler(event, None)
-
     mock_api.delete_namespaced_pod.assert_called_once_with(
         name="demo-service-good", namespace="default"
     )
@@ -144,8 +132,27 @@ def test_malformed_sns_message_does_not_block_other_records(mock_api):
 
 def test_missing_sns_key_in_record_does_not_crash(mock_api):
     event = {"Records": [{"NotSns": "unexpected shape"}]}
-
     result = falco_remediation.handler(event, None)
-
     mock_api.delete_namespaced_pod.assert_not_called()
     assert result == {"status": "ok"}
+
+
+def test_get_eks_bearer_token_produces_k8s_aws_v1_prefix(monkeypatch):
+    monkeypatch.setenv("EKS_CLUSTER_NAME", "devsecops-real")
+    with patch("botocore.session.get_session") as mock_get_session:
+        mock_session = MagicMock()
+        mock_sts = MagicMock()
+        mock_sts.meta.service_model.service_id = "sts"
+        mock_session.create_client.return_value = mock_sts
+        mock_session.get_credentials.return_value = MagicMock()
+        mock_get_session.return_value = mock_session
+
+        with patch("botocore.signers.RequestSigner") as mock_signer_cls:
+            mock_signer = MagicMock()
+            mock_signer.generate_presigned_url.return_value = (
+                "https://sts.us-east-1.amazonaws.com/?Action=GetCallerIdentity"
+            )
+            mock_signer_cls.return_value = mock_signer
+
+            token = falco_remediation._get_eks_bearer_token()
+            assert token.startswith("k8s-aws-v1.")
