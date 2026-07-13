@@ -17,6 +17,14 @@ pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
 info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 step()  { echo ""; echo "=================================================="; echo "STEP: $1"; echo "=================================================="; }
 
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  info "Python virtual environment detected: $VIRTUAL_ENV"
+  deactivate
+  pass "python virtual environment deactivated"
+else
+  info "no python virtual environment active"
+fi
+
 step "local docker containers"
 docker compose down -v 2>/dev/null || true
 pass "jenkins and sonarqube containers and volumes removed"
@@ -105,6 +113,17 @@ if [ -n "$FSK_POLICY_ARN" ]; then
 else
   info "falcosidekick irsa policy already gone, skipping"
 fi
+
+step "local build artifacts"
+rm -rf lambda-package
+rm -rf aws/lambda/venv
+rm -rf aws/lambda/lambda-package
+rm -f falco_remediation.zip
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+find . -name "sbom-*.json" -delete 2>/dev/null || true
+find . -name "gitleaks-report.json" -delete 2>/dev/null || true
+pass "local build artifacts removed: lambda package, venv, pycache, pytest cache, sbom files, gitleaks report"
 
 step "local env file secrets"
 if [ -f .env ]; then
