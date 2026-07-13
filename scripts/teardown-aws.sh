@@ -128,7 +128,7 @@ pass "local build artifacts removed: lambda package, venv, pycache, pytest cache
 step "local env file secrets"
 if [ -f .env ]; then
   sed -i '/^AWS_JENKINS_ACCESS_KEY_ID=/d; /^AWS_JENKINS_SECRET_ACCESS_KEY=/d; /^SONAR_TOKEN=/d; /^SONAR_ADMIN_PASSWORD=/d; /^JENKINS_ADMIN_PASSWORD=/d; /^AWS_ACCOUNT_ID=/d' .env
-  pass "stale credential values removed from .env, snyk token and repo path left intact"
+  pass "sensitive generated credentials removed from .env, user-provided values and non-sensitive configuration retained"
 fi
 
 echo ""
