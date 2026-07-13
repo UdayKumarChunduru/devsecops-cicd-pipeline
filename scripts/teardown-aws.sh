@@ -116,7 +116,7 @@ fi
 
 step "local build artifacts"
 rm -rf lambda-package
-rm -rf aws/lambda/venv
+find aws/lambda/ -type d -name "venv" -exec rm -rf {} + 2>/dev/null || true
 rm -rf aws/lambda/lambda-package
 rm -f falco_remediation.zip
 find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true

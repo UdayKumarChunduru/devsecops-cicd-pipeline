@@ -9,11 +9,13 @@ set -euo pipefail
 FUNC_NAME="falco-remediation"
 PKG_DIR="lambda-package"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE"
 
 rm -rf "$PKG_DIR" falco_remediation.zip
 mkdir -p "$PKG_DIR"
 
-pip install kubernetes --target "$PKG_DIR" --quiet
+python3 -m venv venv
+venv/bin/pip install kubernetes --target "$PKG_DIR" --quiet
 cp "$HERE/falco_remediation.py" "$PKG_DIR/"
 (cd "$PKG_DIR" && zip -qr ../falco_remediation.zip .)
 
