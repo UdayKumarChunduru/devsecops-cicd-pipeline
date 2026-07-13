@@ -23,7 +23,7 @@ import string
 upper = random.choice(string.ascii_uppercase)
 lower = random.choice(string.ascii_lowercase)
 digit = random.choice(string.digits)
-special = random.choice('!@#$%^&*_-+=')
+special = random.choice('!@%^&*_-+=')
 rest = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 pw = list(upper + lower + digit + special + rest)
 random.shuffle(pw)
