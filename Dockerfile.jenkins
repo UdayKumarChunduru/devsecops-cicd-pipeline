@@ -5,6 +5,7 @@ USER root
 RUN apt-get update && \
     apt-get install -y \
       curl \
+      unzip \
       git \
       maven \
       docker.io \
@@ -37,7 +38,12 @@ RUN curl -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/down
     mv gitleaks /usr/local/bin/ && \
     rm gitleaks.tar.gz
 
-RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version && python3 --version && pip3 --version
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip
+
+RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version && python3 --version && pip3 --version && aws --version
 
 COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
