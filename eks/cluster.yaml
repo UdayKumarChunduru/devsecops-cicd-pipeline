@@ -4,7 +4,7 @@ kind: ClusterConfig
 metadata:
   name: devsecops-real
   region: us-east-1
-  version: "1.31"
+  version: "1.36"
 
 iam:
   withOIDC: true
