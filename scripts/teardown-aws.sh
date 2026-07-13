@@ -118,7 +118,7 @@ step "local build artifacts"
 rm -rf lambda-package
 find aws/lambda/ -type d -name "venv" -exec rm -rf {} + 2>/dev/null || true
 rm -rf aws/lambda/lambda-package
-rm -f falco_remediation.zip
+rm -f aws/lambda/falco_remediation.zip
 find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 find . -name "sbom-*.json" -delete 2>/dev/null || true
