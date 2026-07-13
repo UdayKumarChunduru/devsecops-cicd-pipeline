@@ -34,7 +34,9 @@ else
   fi
   info "default credentials confirmed valid, attempting password change"
   CHANGE_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -u admin:admin -X POST "http://localhost:9000/api/users/change_password" \
-    -d "login=admin&previousPassword=admin&password=${SONAR_ADMIN_PASSWORD}")
+    --data-urlencode "login=admin" \
+    --data-urlencode "previousPassword=admin" \
+    --data-urlencode "password=${SONAR_ADMIN_PASSWORD}")
   info "change password response: $CHANGE_RESPONSE"
   CONFIRM=$(curl -s -u "admin:${SONAR_ADMIN_PASSWORD}" http://localhost:9000/api/authentication/validate)
   info "post change validate response: $CONFIRM"
