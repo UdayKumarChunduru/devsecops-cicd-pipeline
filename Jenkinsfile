@@ -19,6 +19,10 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
     }
 
+    triggers {
+        pollSCM('H/2 * * * *')
+    }
+
     stages {
         stage('Secret scan - Gitleaks') {
             steps {
