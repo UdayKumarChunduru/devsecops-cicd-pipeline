@@ -1,0 +1,178 @@
+---
+- name: Bootstrap Jenkins and SonarQube
+  hosts: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all/vars.yml
+    - ../group_vars/all/vault.yml
+
+  tasks:
+    - name: Load terraform outputs
+      ansible.builtin.set_fact:
+        tf_outputs: "{{ lookup('file', project_root + '/.terraform-outputs.json') | from_json }}"
+
+    - name: Ensure secrets directory exists
+      ansible.builtin.file:
+        path: "{{ project_root }}/.secrets"
+        state: directory
+        mode: "0700"
+
+    - name: Generate or read jenkins admin password
+      ansible.builtin.set_fact:
+        jenkins_admin_password: "{{ lookup('ansible.builtin.password', project_root + '/.secrets/jenkins_admin_password', chars=['ascii_letters', 'digits', '!@%^&*_-+=']) }}"
+
+    - name: Generate or read sonarqube admin password
+      ansible.builtin.set_fact:
+        sonar_admin_password: "{{ lookup('ansible.builtin.password', project_root + '/.secrets/sonar_admin_password', chars=['ascii_letters', 'digits', '!@%^&*_-+=']) }}"
+
+    - name: Render docker-compose.yml
+      ansible.builtin.template:
+        src: ../files/docker-compose.yml.j2
+        dest: "{{ project_root }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Start sonarqube container
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_root }}"
+        services: [sonarqube]
+        state: present
+
+    - name: Wait for sonarqube to respond
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/system/status"
+        status_code: 200
+      register: sonar_status
+      until: sonar_status.json.status is defined and sonar_status.json.status == "UP"
+      retries: 30
+      delay: 5
+
+    - name: Check if the generated sonar password already works
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/authentication/validate"
+        url_username: admin
+        url_password: "{{ sonar_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: sonar_login_check
+
+    - name: Change sonarqube default admin password
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/users/change_password"
+        method: POST
+        url_username: admin
+        url_password: admin
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body:
+          login: admin
+          previousPassword: admin
+          password: "{{ sonar_admin_password }}"
+        status_code: [200, 204]
+      when: not sonar_login_check.json.valid
+
+    - name: Revoke any existing jenkins sonar token
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/user_tokens/revoke"
+        method: POST
+        url_username: admin
+        url_password: "{{ sonar_admin_password }}"
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body:
+          name: jenkins
+        status_code: [200, 204]
+      failed_when: false
+
+    - name: Generate a fresh sonar token for jenkins
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/user_tokens/generate"
+        method: POST
+        url_username: admin
+        url_password: "{{ sonar_admin_password }}"
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body:
+          name: jenkins
+        status_code: 200
+      register: sonar_token_response
+
+    - name: Save sonar token as a fact
+      ansible.builtin.set_fact:
+        sonar_token: "{{ sonar_token_response.json.token }}"
+
+    - name: List existing sonarqube webhooks
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/webhooks/list"
+        url_username: admin
+        url_password: "{{ sonar_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: sonar_webhooks
+
+    - name: Create jenkins webhook in sonarqube
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/webhooks/create"
+        method: POST
+        url_username: admin
+        url_password: "{{ sonar_admin_password }}"
+        force_basic_auth: true
+        body_format: form-urlencoded
+        body:
+          name: jenkins
+          url: "http://jenkins:8080/sonarqube-webhook/"
+        status_code: 200
+      when: sonar_webhooks.json.webhooks | selectattr('name', 'equalto', 'jenkins') | list | length == 0
+
+    - name: Ensure jenkins directory exists
+      ansible.builtin.file:
+        path: "{{ project_root }}/jenkins"
+        state: directory
+        mode: "0755"
+
+    - name: Render jenkins casc.yaml with real values
+      ansible.builtin.template:
+        src: ../files/casc.yaml.j2
+        dest: "{{ project_root }}/jenkins/casc.yaml"
+        mode: "0600"
+      vars:
+        jenkins_admin_user: "{{ vault_jenkins_admin_user }}"
+        snyk_token: "{{ vault_snyk_token }}"
+        aws_account_id: "{{ tf_outputs.aws_account_id.value }}"
+        jenkins_access_key_id: "{{ tf_outputs.jenkins_access_key_id.value }}"
+        jenkins_secret_access_key: "{{ tf_outputs.jenkins_secret_access_key.value }}"
+
+    - name: Build and start jenkins container
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_root }}"
+        services: [jenkins]
+        build: always
+        state: present
+
+    - name: Wait for jenkins to respond
+      ansible.builtin.uri:
+        url: "http://localhost:8080/login"
+        status_code: 200
+      register: jenkins_up
+      until: jenkins_up.status == 200
+      retries: 30
+      delay: 5
+
+    - name: Fetch jenkins csrf crumb
+      ansible.builtin.uri:
+        url: "http://localhost:8080/crumbIssuer/api/json"
+        url_username: "{{ vault_jenkins_admin_user }}"
+        url_password: "{{ jenkins_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: crumb_response
+
+    - name: Trigger the devsecops-pipeline build
+      ansible.builtin.uri:
+        url: "http://localhost:8080/job/devsecops-pipeline/build"
+        method: POST
+        url_username: "{{ vault_jenkins_admin_user }}"
+        url_password: "{{ jenkins_admin_password }}"
+        force_basic_auth: true
+        headers:
+          "{{ crumb_response.json.crumbRequestField }}": "{{ crumb_response.json.crumb }}"
+        status_code: 201

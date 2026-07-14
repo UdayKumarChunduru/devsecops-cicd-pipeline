@@ -1,0 +1,128 @@
+---
+- name: Deploy Kubernetes RBAC, Kyverno and Falco
+  hosts: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+    - name: Load terraform outputs
+      ansible.builtin.set_fact:
+        tf_outputs: "{{ lookup('file', project_root + '/.terraform-outputs.json') | from_json }}"
+
+    - name: Update local kubeconfig for the cluster
+      ansible.builtin.command:
+        cmd: "aws eks update-kubeconfig --name {{ tf_outputs.cluster_name.value }} --region {{ aws_region }}"
+      changed_when: true
+
+    - name: Apply falco-remediator RBAC
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_dir }}/rbac-falco-remediator.yaml"
+
+    - name: Apply jenkins-deploy RBAC role
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          metadata:
+            name: jenkins-deploy
+            namespace: default
+          rules:
+            - apiGroups: ["apps"]
+              resources: ["deployments"]
+              verbs: ["get", "list", "watch", "create", "update", "patch"]
+            - apiGroups: [""]
+              resources: ["services", "pods"]
+              verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+    - name: Bind jenkins-deploy role to the jenkins-deploy-group
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: RoleBinding
+          metadata:
+            name: jenkins-deploy-binding
+            namespace: default
+          subjects:
+            - kind: Group
+              name: jenkins-deploy-group
+              apiGroup: rbac.authorization.k8s.io
+          roleRef:
+            kind: Role
+            name: jenkins-deploy
+            apiGroup: rbac.authorization.k8s.io
+
+    - name: Add kyverno helm repo
+      kubernetes.core.helm_repository:
+        name: kyverno
+        repo_url: https://kyverno.github.io/kyverno/
+
+    - name: Add falcosecurity helm repo
+      kubernetes.core.helm_repository:
+        name: falcosecurity
+        repo_url: https://falcosecurity.github.io/charts
+
+    - name: Install kyverno
+      kubernetes.core.helm:
+        name: kyverno
+        chart_ref: kyverno/kyverno
+        release_namespace: kyverno
+        create_namespace: true
+        wait: true
+        timeout: 5m0s
+
+    - name: Apply kyverno cluster policies
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+      loop:
+        - "{{ kyverno_dir }}/disallow-root-user.yaml"
+        - "{{ kyverno_dir }}/require-resource-limits.yaml"
+
+    - name: Create falco namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: falco
+
+    - name: Create falcosidekick service account with IRSA annotation
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: falcosidekick
+            namespace: falco
+            annotations:
+              eks.amazonaws.com/role-arn: "{{ tf_outputs.falcosidekick_irsa_role_arn.value }}"
+
+    - name: Install falco and falcosidekick
+      kubernetes.core.helm:
+        name: falco
+        chart_ref: falcosecurity/falco
+        release_namespace: falco
+        create_namespace: false
+        wait: true
+        timeout: 5m0s
+        values:
+          falcosidekick:
+            enabled: true
+            serviceAccount:
+              create: false
+              name: falcosidekick
+            config:
+              aws:
+                region: "{{ aws_region }}"
+                sns:
+                  topicarn: "{{ tf_outputs.sns_topic_arn.value }}"
+                  minimumpriority: critical
+                  rawjson: true
+          customRules:
+            custom-rules.yaml: "{{ lookup('file', project_root + '/falco/custom-rules.yaml') }}"

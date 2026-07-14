@@ -1,0 +1,80 @@
+---
+- name: Tear down the terraform-aws branch stack
+  hosts: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+    - name: Check if a cluster is reachable
+      ansible.builtin.command:
+        cmd: kubectl get nodes
+      register: cluster_check
+      failed_when: false
+      changed_when: false
+
+    - name: Uninstall falco
+      kubernetes.core.helm:
+        name: falco
+        release_namespace: falco
+        state: absent
+      when: cluster_check.rc == 0
+      failed_when: false
+
+    - name: Uninstall kyverno
+      kubernetes.core.helm:
+        name: kyverno
+        release_namespace: kyverno
+        state: absent
+      when: cluster_check.rc == 0
+      failed_when: false
+
+    - name: Stop local docker containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_root }}"
+        state: absent
+      failed_when: false
+
+    - name: Get compose project name
+      ansible.builtin.set_fact:
+        compose_project: "{{ project_root | basename | regex_replace('[^a-z0-9]', '') }}"
+
+    - name: Remove jenkins and sonarqube volumes only
+      community.docker.docker_volume:
+        name: "{{ compose_project }}_{{ item }}"
+        state: absent
+      loop:
+        - jenkins_home
+        - sonarqube_data
+        - sonarqube_extensions
+      failed_when: false
+
+    - name: Destroy terraform managed infra
+      ansible.builtin.command:
+        cmd: terraform destroy -auto-approve -input=false
+        chdir: "{{ terraform_dir }}"
+      changed_when: true
+
+    - name: Remove local build artifacts and generated secrets
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ lambda_dir }}/lambda-package"
+        - "{{ lambda_dir }}/falco_remediation.zip"
+        - "{{ project_root }}/.terraform-outputs.json"
+        - "{{ project_root }}/.secrets/jenkins_admin_password"
+        - "{{ project_root }}/.secrets/sonar_admin_password"
+        - "{{ project_root }}/jenkins/casc.yaml"
+
+    - name: Find and remove pycache and pytest cache directories
+      ansible.builtin.shell: |
+        find "{{ project_root }}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+        find "{{ project_root }}" -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null
+        find "{{ project_root }}" -name "sbom-*.json" -delete 2>/dev/null
+        find "{{ project_root }}" -name "gitleaks-report.json" -delete 2>/dev/null
+      changed_when: false
+
+    - name: Teardown complete
+      ansible.builtin.debug:
+        msg: "teardown complete, run aws eks list-clusters, aws ecr describe-repositories and aws lambda list-functions to confirm nothing billable remains"

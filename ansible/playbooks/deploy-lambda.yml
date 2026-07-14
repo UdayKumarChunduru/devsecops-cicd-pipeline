@@ -1,0 +1,99 @@
+---
+- name: Package and deploy the falco-remediation lambda
+  hosts: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+    - name: Load terraform outputs
+      ansible.builtin.set_fact:
+        tf_outputs: "{{ lookup('file', project_root + '/.terraform-outputs.json') | from_json }}"
+
+    - name: Lint the lambda code
+      ansible.builtin.command:
+        cmd: python3 -m flake8 falco_remediation.py tests/ --max-line-length=100 --ignore=E501,W503
+        chdir: "{{ lambda_dir }}"
+      changed_when: false
+
+    - name: Run the lambda test suite
+      ansible.builtin.command:
+        cmd: python3 -m pytest tests/ -v
+        chdir: "{{ lambda_dir }}"
+      changed_when: false
+
+    - name: Clean previous package directory
+      ansible.builtin.file:
+        path: "{{ lambda_dir }}/lambda-package"
+        state: absent
+
+    - name: Create fresh package directory
+      ansible.builtin.file:
+        path: "{{ lambda_dir }}/lambda-package"
+        state: directory
+        mode: "0755"
+
+    - name: Install kubernetes client into package directory
+      ansible.builtin.pip:
+        name: kubernetes
+        target: "{{ lambda_dir }}/lambda-package"
+
+    - name: Copy handler code into package directory
+      ansible.builtin.copy:
+        src: "{{ lambda_dir }}/falco_remediation.py"
+        dest: "{{ lambda_dir }}/lambda-package/falco_remediation.py"
+        mode: "0644"
+
+    - name: Zip the deployment package
+      ansible.builtin.command:
+        cmd: zip -qr ../falco_remediation.zip .
+        chdir: "{{ lambda_dir }}/lambda-package"
+      changed_when: true
+
+    - name: Deploy or update the lambda function
+      amazon.aws.lambda:
+        name: falco-remediation
+        state: present
+        region: "{{ aws_region }}"
+        zip_file: "{{ lambda_dir }}/falco_remediation.zip"
+        runtime: python3.12
+        handler: falco_remediation.handler
+        role: "{{ tf_outputs.lambda_role_arn.value }}"
+        timeout: 30
+        memory_size: 256
+        environment_variables:
+          EKS_CLUSTER_NAME: "{{ tf_outputs.cluster_name.value }}"
+          TARGET_NAMESPACE: default
+
+    - name: Get the lambda function arn
+      amazon.aws.lambda_info:
+        name: falco-remediation
+        region: "{{ aws_region }}"
+      register: lambda_info
+
+    - name: Grant sns permission to invoke the lambda
+      amazon.aws.lambda_policy:
+        function_name: falco-remediation
+        region: "{{ aws_region }}"
+        state: present
+        statement_id: sns-invoke
+        action: lambda:InvokeFunction
+        principal: sns.amazonaws.com
+        source_arn: "{{ tf_outputs.sns_topic_arn.value }}"
+
+    - name: Subscribe the lambda to the sns topic
+      amazon.aws.sns_topic:
+        name: "{{ sns_topic_name }}"
+        region: "{{ aws_region }}"
+        state: present
+        subscriptions:
+          - endpoint: "{{ lambda_info.functions[0].function_arn }}"
+            protocol: lambda
+
+    - name: Clean up local package artifacts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ lambda_dir }}/lambda-package"
+        - "{{ lambda_dir }}/falco_remediation.zip"

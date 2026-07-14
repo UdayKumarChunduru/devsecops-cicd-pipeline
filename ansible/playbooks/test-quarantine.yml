@@ -1,0 +1,102 @@
+---
+- name: End to end falco quarantine test
+  hosts: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+    - name: Load terraform outputs
+      ansible.builtin.set_fact:
+        tf_outputs: "{{ lookup('file', project_root + '/.terraform-outputs.json') | from_json }}"
+
+    - name: Check for an existing demo-service deployment
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        name: demo-service
+        namespace: default
+      register: existing_deployment
+
+    - name: Deploy a kyverno compliant placeholder if none exists
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: demo-service
+            namespace: default
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: demo-service
+            template:
+              metadata:
+                labels:
+                  app: demo-service
+                  quarantine: "false"
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 101
+                containers:
+                  - name: demo-service
+                    image: nginxinc/nginx-unprivileged:latest
+                    ports:
+                      - containerPort: 8080
+                    resources:
+                      requests:
+                        cpu: 100m
+                        memory: 128Mi
+                      limits:
+                        cpu: 250m
+                        memory: 256Mi
+        wait: true
+        wait_timeout: 120
+      when: existing_deployment.resources | length == 0
+
+    - name: Get a target pod
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: default
+        label_selectors:
+          - "app=demo-service"
+      register: pods
+
+    - name: Set target pod name
+      ansible.builtin.set_fact:
+        target_pod: "{{ pods.resources[0].metadata.name }}"
+
+    - name: Publish a simulated critical falco alert to sns
+      amazon.aws.sns:
+        topic: "{{ tf_outputs.sns_topic_arn.value }}"
+        region: "{{ aws_region }}"
+        msg: "{{ {'priority': 'Critical', 'rule': 'Privilege Escalation In Demo Container', 'output_fields': {'k8s.pod.name': target_pod, 'k8s.ns.name': 'default'}} | to_json }}"
+
+    - name: Wait for the target pod to be deleted by the lambda
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: default
+        name: "{{ target_pod }}"
+      register: pod_check
+      until: pod_check.resources | length == 0
+      retries: 12
+      delay: 5
+
+    - name: Confirm a replacement pod is running
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: default
+        label_selectors:
+          - "app=demo-service"
+        field_selectors:
+          - "status.phase=Running"
+      register: replacement_pods
+
+    - name: Assert at least one replacement pod is running
+      ansible.builtin.assert:
+        that:
+          - replacement_pods.resources | length >= 1
+        fail_msg: "no running replacement pod found, quarantine flow did not complete"
+        success_msg: "quarantine test passed, replicaset controller replaced the deleted pod"
