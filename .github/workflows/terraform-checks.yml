@@ -1,0 +1,78 @@
+name: terraform and ansible checks
+
+on:
+  pull_request:
+    branches: [terraform-aws]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+  push:
+    branches: [terraform-aws]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+
+jobs:
+  terraform-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+
+      - name: terraform fmt check
+        run: terraform fmt -check -recursive terraform/
+
+      - name: terraform init and validate
+        run: |
+          for dir in terraform/bootstrap terraform/environments/aws terraform/modules/*/; do
+            terraform -chdir="$dir" init -backend=false
+            terraform -chdir="$dir" validate
+          done
+
+      - uses: terraform-linters/setup-tflint@v6
+
+      - name: tflint
+        run: |
+          for dir in terraform/bootstrap terraform/environments/aws terraform/modules/*/; do
+            tflint --chdir="$dir" --init
+            tflint --chdir="$dir"
+          done
+
+      - name: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          quiet: true
+          soft_fail: false
+
+  ansible-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: install ansible-lint
+        run: pip install ansible-lint
+
+      - name: run ansible-lint
+        run: ansible-lint ansible/playbooks/*.yml
+
+  infracost:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: infracost breakdown
+        run: |
+          infracost breakdown --path terraform/environments/aws \
+            --format table \
+            --out-file infracost-report.txt
+
+      - name: post cost estimate
+        run: cat infracost-report.txt
