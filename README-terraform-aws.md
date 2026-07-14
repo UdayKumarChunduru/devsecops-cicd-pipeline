@@ -1,0 +1,39 @@
+# terraform-aws branch
+
+Same architecture proven on the aws branch, EKS, ECR, SNS,
+Lambda, IAM/IRSA, but every piece of infrastructure is declared
+in Terraform and every piece of orchestration runs through Ansible
+playbooks. No bash scripts, no manual CLI steps.
+
+## One time setup
+
+    pip install ansible --break-system-packages
+    make galaxy-install
+
+    cd terraform/bootstrap
+    terraform init
+    terraform apply
+    cd ../..
+
+    make vault-init
+    ansible-vault encrypt ansible/group_vars/all/vault.yml
+
+## Run everything
+
+    make up
+
+## Individual stages
+
+    make infra
+    make jenkins
+    make k8s
+    make lambda
+    make test
+
+## Teardown
+
+    make down
+
+## Linting locally
+
+    make lint
