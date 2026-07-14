@@ -40,11 +40,12 @@
     - name: Wait for sonarqube to respond
       ansible.builtin.uri:
         url: "http://localhost:9000/api/system/status"
-        status_code: 200
+        status_code: [200, 404, 500, 503]
       register: sonar_status
-      until: sonar_status.json.status is defined and sonar_status.json.status == "UP"
+      until: sonar_status.status == 200 and sonar_status.json is defined and sonar_status.json.status is defined and sonar_status.json.status == "UP"
       retries: 30
       delay: 5
+      ignore_errors: true
 
     - name: Check if the generated sonar password already works
       ansible.builtin.uri:
