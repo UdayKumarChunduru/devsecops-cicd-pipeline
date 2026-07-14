@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: terraform
+    directory: /terraform/environments/aws
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /terraform/modules/vpc
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /terraform/modules/eks
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /terraform/modules/iam
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
