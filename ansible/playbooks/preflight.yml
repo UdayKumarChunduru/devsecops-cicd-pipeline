@@ -1,0 +1,30 @@
+---
+- name: Check required tools and credentials are present
+  hosts: local
+  gather_facts: false
+
+  tasks:
+    - name: Check required binaries exist
+      ansible.builtin.command:
+        cmd: "which {{ item }}"
+      register: binary_check
+      failed_when: binary_check.rc != 0
+      changed_when: false
+      loop:
+        - terraform
+        - aws
+        - kubectl
+        - helm
+        - zip
+        - python3
+
+    - name: Check aws credentials are configured
+      ansible.builtin.command:
+        cmd: aws sts get-caller-identity
+      register: aws_identity
+      failed_when: aws_identity.rc != 0
+      changed_when: false
+
+    - name: Show confirmed aws identity
+      ansible.builtin.debug:
+        var: aws_identity.stdout

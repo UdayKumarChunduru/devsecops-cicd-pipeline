@@ -1,5 +1,8 @@
 ---
 - name: Full devsecops-pipeline terraform-aws provisioning
+  import_playbook: preflight.yml
+
+- name: Provision infra
   import_playbook: provision-infra.yml
 
 - name: Bootstrap jenkins and sonarqube

@@ -2,6 +2,7 @@
 
 galaxy-install:
 	ansible-galaxy collection install -r ansible/requirements.yml
+	pip install boto3 botocore docker --break-system-packages
 
 vault-init:
 	@test -f ansible/group_vars/all/vault.yml || \
