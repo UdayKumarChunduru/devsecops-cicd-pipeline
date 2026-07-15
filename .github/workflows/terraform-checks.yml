@@ -45,7 +45,7 @@ jobs:
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform/
-          quiet: true
+          config_file: .checkov.yaml
           soft_fail: false
 
   ansible-checks:
