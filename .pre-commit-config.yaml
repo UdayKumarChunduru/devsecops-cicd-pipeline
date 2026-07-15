@@ -17,7 +17,6 @@ repos:
       - id: ansible-lint
         language_version: python3
         additional_dependencies:
-          - ansible
           - boto3
           - botocore
           - docker
