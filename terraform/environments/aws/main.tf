@@ -30,6 +30,7 @@ module "iam" {
   ecr_repository_arn = module.ecr.repository_arn
   oidc_provider_arn  = module.eks.oidc_provider_arn
   sns_topic_arn      = module.sns.topic_arn
+  sns_kms_key_arn    = module.sns.kms_key_arn
 }
 
 resource "aws_eks_access_entry" "lambda_remediator" {

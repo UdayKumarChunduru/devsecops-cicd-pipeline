@@ -76,6 +76,7 @@ data "aws_iam_policy_document" "jenkins_ecr_eks" {
   }
 }
 
+#checkov:skip=CKV_AWS_273:jenkins runs outside aws on a local docker host and needs long lived programmatic credentials, there is no reachable sso or oidc federation path from an external local ci host for this project's scope
 resource "aws_iam_user" "jenkins" {
   name = "jenkins-devsecops-pipeline"
 }
@@ -85,6 +86,7 @@ resource "aws_iam_policy" "jenkins_ecr_eks" {
   policy = data.aws_iam_policy_document.jenkins_ecr_eks.json
 }
 
+#checkov:skip=CKV_AWS_40:single purpose automation user for this project, the policy is scoped tightly to ecr push pull and eks describe only, a group adds no practical benefit for one credential used by one jenkins instance
 resource "aws_iam_user_policy_attachment" "jenkins" {
   user       = aws_iam_user.jenkins.name
   policy_arn = aws_iam_policy.jenkins_ecr_eks.arn
@@ -92,20 +94,6 @@ resource "aws_iam_user_policy_attachment" "jenkins" {
 
 resource "aws_iam_access_key" "jenkins" {
   user = aws_iam_user.jenkins.name
-}
-
-data "aws_iam_policy_document" "falcosidekick_sns_publish" {
-  statement {
-    sid       = "PublishToDevsecopsAlerts"
-    effect    = "Allow"
-    actions   = ["sns:Publish"]
-    resources = [var.sns_topic_arn]
-  }
-}
-
-resource "aws_iam_policy" "falcosidekick_sns_publish" {
-  name   = "falcosidekick-sns-publish"
-  policy = data.aws_iam_policy_document.falcosidekick_sns_publish.json
 }
 
 module "falcosidekick_irsa" {
@@ -124,4 +112,25 @@ module "falcosidekick_irsa" {
   role_policy_arns = {
     sns_publish = aws_iam_policy.falcosidekick_sns_publish.arn
   }
+}
+
+data "aws_iam_policy_document" "falcosidekick_sns_publish" {
+  statement {
+    sid       = "PublishToDevsecopsAlerts"
+    effect    = "Allow"
+    actions   = ["sns:Publish"]
+    resources = [var.sns_topic_arn]
+  }
+
+  statement {
+    sid       = "UseSnsTopicKmsKey"
+    effect    = "Allow"
+    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]
+    resources = [var.sns_kms_key_arn]
+  }
+}
+
+resource "aws_iam_policy" "falcosidekick_sns_publish" {
+  name   = "falcosidekick-sns-publish"
+  policy = data.aws_iam_policy_document.falcosidekick_sns_publish.json
 }
