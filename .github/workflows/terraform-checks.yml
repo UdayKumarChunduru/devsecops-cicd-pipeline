@@ -55,7 +55,8 @@ jobs:
 
       - name: install ansible-lint and collections
         run: |
-          pip install ansible-lint
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ansible-lint==26.6.0
           ansible-galaxy collection install -r ansible/requirements.yml
 
       - name: run ansible-lint
