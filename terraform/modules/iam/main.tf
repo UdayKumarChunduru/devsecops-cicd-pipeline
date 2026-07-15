@@ -1,3 +1,14 @@
+terraform {
+  required_version = ">= 1.15.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+  }
+}
+
 data "aws_iam_policy_document" "lambda_trust" {
   statement {
     effect  = "Allow"
