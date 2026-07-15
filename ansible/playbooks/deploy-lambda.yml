@@ -36,7 +36,8 @@
     - name: Install kubernetes client into package directory
       ansible.builtin.pip:
         name: kubernetes
-        target: "{{ lambda_dir }}/lambda-package"
+        extra_args: "--target {{ lambda_dir }}/lambda-package"
+        executable: pip3
 
     - name: Copy handler code into package directory
       ansible.builtin.copy:
@@ -82,7 +83,7 @@
         source_arn: "{{ tf_outputs.sns_topic_arn.value }}"
 
     - name: Subscribe the lambda to the sns topic
-      amazon.aws.sns_topic:
+      community.aws.sns_topic:
         name: "{{ sns_topic_name }}"
         region: "{{ aws_region }}"
         state: present

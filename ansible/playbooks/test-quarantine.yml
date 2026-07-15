@@ -69,7 +69,7 @@
         target_pod: "{{ pods.resources[0].metadata.name }}"
 
     - name: Publish a simulated critical falco alert to sns
-      amazon.aws.sns:
+      community.aws.sns:
         topic: "{{ tf_outputs.sns_topic_arn.value }}"
         region: "{{ aws_region }}"
         msg: "{{ {'priority': 'Critical', 'rule': 'Privilege Escalation In Demo Container', 'output_fields': {'k8s.pod.name': target_pod, 'k8s.ns.name': 'default'}} | to_json }}"
