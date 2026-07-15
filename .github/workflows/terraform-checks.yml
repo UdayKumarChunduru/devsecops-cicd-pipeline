@@ -59,7 +59,9 @@ jobs:
           ansible-galaxy collection install -r ansible/requirements.yml
 
       - name: run ansible-lint
-        run: ansible-lint ansible/playbooks/*.yml
+        run: |
+          cd ansible
+          ansible-lint playbooks/*.yml
 
   infracost:
     runs-on: ubuntu-latest

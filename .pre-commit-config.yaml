@@ -15,6 +15,13 @@ repos:
     rev: v26.6.0
     hooks:
       - id: ansible-lint
+        language_version: python3
+        additional_dependencies:
+          - ansible
+          - boto3
+          - botocore
+          - docker
+          - kubernetes
         files: ^ansible/.*\.(yml|yaml)$
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
