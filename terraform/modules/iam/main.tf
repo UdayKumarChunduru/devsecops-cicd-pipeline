@@ -76,7 +76,7 @@ data "aws_iam_policy_document" "jenkins_ecr_eks" {
   }
 }
 
-#checkov:skip=CKV_AWS_273:jenkins runs outside aws on a local docker host and needs long lived programmatic credentials, there is no reachable sso or oidc federation path from an external local ci host for this project's scope
+#checkov:skip=CKV_AWS_273:jenkins runs outside aws on a local docker host with a static access key by design, there is no sso or oidc session for a local ci runner to assume, decided to keep the iam user rather than build out identity center federation for a solo project
 resource "aws_iam_user" "jenkins" {
   name = "jenkins-devsecops-pipeline"
 }
@@ -86,7 +86,7 @@ resource "aws_iam_policy" "jenkins_ecr_eks" {
   policy = data.aws_iam_policy_document.jenkins_ecr_eks.json
 }
 
-#checkov:skip=CKV_AWS_40:single purpose automation user for this project, the policy is scoped tightly to ecr push pull and eks describe only, a group adds no practical benefit for one credential used by one jenkins instance
+#checkov:skip=CKV_AWS_40:single purpose automation user for one jenkins instance, policy is scoped to ecr push pull and eks describe only, a group adds no practical benefit here
 resource "aws_iam_user_policy_attachment" "jenkins" {
   user       = aws_iam_user.jenkins.name
   policy_arn = aws_iam_policy.jenkins_ecr_eks.arn
@@ -97,10 +97,9 @@ resource "aws_iam_access_key" "jenkins" {
 }
 
 module "falcosidekick_irsa" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.53"
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-iam.git//modules/iam-role-for-service-accounts?ref=5b962b1163790398605f2b17447cf5b6cc512237"
 
-  role_name = "falcosidekick-irsa-role"
+  name = "falcosidekick-irsa-role"
 
   oidc_providers = {
     main = {
@@ -109,7 +108,7 @@ module "falcosidekick_irsa" {
     }
   }
 
-  role_policy_arns = {
+  policies = {
     sns_publish = aws_iam_policy.falcosidekick_sns_publish.arn
   }
 }
