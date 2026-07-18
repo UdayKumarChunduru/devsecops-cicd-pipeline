@@ -1,5 +1,8 @@
 name: terraform and ansible checks
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: [terraform-aws]
