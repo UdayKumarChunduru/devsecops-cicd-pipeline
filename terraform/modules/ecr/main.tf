@@ -9,10 +9,27 @@ terraform {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "ecr" {
   description             = "kms key for encrypting the demo-service ecr repository"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountFullAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_ecr_repository" "this" {
