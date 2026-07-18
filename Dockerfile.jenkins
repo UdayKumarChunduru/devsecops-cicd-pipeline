@@ -3,49 +3,46 @@ FROM jenkins/jenkins:lts-jdk21
 USER root
 
 RUN apt-get update && \
-    apt-get install -y \
-      curl \
-      unzip \
-      git \
-      maven \
-      docker.io \
-      python3 \
-      python3-pip && \
-    rm -rf /var/lib/apt/lists/*
+apt-get install -y \
+curl \
+unzip \
+git \
+maven \
+docker.io \
+python3 \
+python3-pip && \
+rm -rf /var/lib/apt/lists/*
 
 RUN curl -sLO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && \
-    chmod +x kubectl && \
-    mv kubectl /usr/local/bin/
+chmod +x kubectl && \
+mv kubectl /usr/local/bin/
 
 RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-RUN curl -sLo /usr/local/bin/kind \
-    https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64 && \
-    chmod +x /usr/local/bin/kind
-
 RUN git config --system --add safe.directory '*'
 
-
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    apt-get install -y nodejs
+apt-get install -y nodejs
 
 RUN npm install -g snyk
 
 RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
 RUN curl -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz && \
-    tar -xzf gitleaks.tar.gz gitleaks && \
-    mv gitleaks /usr/local/bin/ && \
-    rm gitleaks.tar.gz
+tar -xzf gitleaks.tar.gz gitleaks && \
+mv gitleaks /usr/local/bin/ && \
+rm gitleaks.tar.gz
 
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-    unzip awscliv2.zip && \
-    ./aws/install && \
-    rm -rf awscliv2.zip
+unzip awscliv2.zip && \
+./aws/install && \
+rm -rf awscliv2.zip
 
 RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version && python3 --version && pip3 --version && aws --version
 
 COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD curl -f http://localhost:8080/login || exit 1
 
 USER jenkins
