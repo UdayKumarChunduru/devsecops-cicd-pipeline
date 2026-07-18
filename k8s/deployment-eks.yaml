@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: demo-service
+  namespace: devsecops-pipeline
   labels:
     app: demo-service
 spec:
@@ -15,13 +16,22 @@ spec:
         app: demo-service
         quarantine: "false"
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: demo-service
           image: IMAGE_PLACEHOLDER
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 8080
           resources:
@@ -43,3 +53,9 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

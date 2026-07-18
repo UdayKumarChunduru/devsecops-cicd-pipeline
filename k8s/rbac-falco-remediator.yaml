@@ -2,18 +2,17 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: falco-remediator
-  namespace: default
+  namespace: devsecops-pipeline
 rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "patch", "delete"]
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: falco-remediator-binding
-  namespace: default
+  namespace: devsecops-pipeline
 subjects:
   - kind: Group
     name: falco-remediator-group
