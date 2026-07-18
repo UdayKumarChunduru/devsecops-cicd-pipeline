@@ -13,10 +13,32 @@ provider "aws" {
   region = var.aws_region
 }
 
+provider "aws" {
+  alias  = "replica"
+  region = var.replica_region
+}
+
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "state" {
   description             = "kms key for encrypting terraform state bucket and lock table"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountFullAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_kms_alias" "state" {
@@ -24,10 +46,43 @@ resource "aws_kms_alias" "state" {
   target_key_id = aws_kms_key.state.key_id
 }
 
-#checkov:skip=CKV_AWS_144:solo project single region tfstate logging bucket, cross region replication is disproportionate cost and complexity for this scope
-#checkov:skip=CKV2_AWS_62:this bucket only receives passive access log writes from s3 itself, event notifications add no practical value here
+resource "aws_kms_key" "state_replica" {
+  provider                = aws.replica
+  description             = "kms key for encrypting replicated terraform state resources"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountFullAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_kms_alias" "state_replica" {
+  provider      = aws.replica
+  name          = "alias/${var.state_bucket_name}-replica-key"
+  target_key_id = aws_kms_key.state_replica.key_id
+}
+
 resource "aws_s3_bucket" "state_logs" {
   bucket = "${var.state_bucket_name}-logs"
+}
+
+resource "aws_s3_bucket_versioning" "state_logs" {
+  bucket = aws_s3_bucket.state_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "state_logs" {
@@ -50,19 +105,60 @@ resource "aws_s3_bucket_public_access_block" "state_logs" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_notification" "state_logs" {
+  bucket      = aws_s3_bucket.state_logs.id
+  eventbridge = true
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "state_logs" {
   bucket = aws_s3_bucket.state_logs.id
   rule {
     id     = "expire-old-logs"
     status = "Enabled"
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
     expiration {
       days = 90
     }
   }
 }
 
-#checkov:skip=CKV_AWS_18:this is the access log target bucket, logging a log bucket to itself creates an infinite loop, this is the standard exception for log target buckets
-#checkov:skip=CKV_AWS_144:solo project single region tfstate bucket, cross region replication is disproportionate cost and complexity for this scope, versioning already protects against accidental loss
+resource "aws_s3_bucket" "state_logs_replica" {
+  provider = aws.replica
+  bucket   = "${var.state_bucket_name}-logs-replica"
+}
+
+resource "aws_s3_bucket_versioning" "state_logs_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.state_logs_replica.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "state_logs_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.state_logs_replica.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.state_replica.arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "state_logs_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.state_logs_replica.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket" "terraform_state" {
   bucket = var.state_bucket_name
 
@@ -109,6 +205,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
   rule {
     id     = "expire-noncurrent-versions"
     status = "Enabled"
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
     noncurrent_version_expiration {
       noncurrent_days = 90
     }
@@ -118,6 +217,170 @@ resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
 resource "aws_s3_bucket_notification" "terraform_state" {
   bucket      = aws_s3_bucket.terraform_state.id
   eventbridge = true
+}
+
+resource "aws_s3_bucket" "terraform_state_replica" {
+  provider = aws.replica
+  bucket   = "${var.state_bucket_name}-replica"
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.terraform_state_replica.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.terraform_state_replica.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.state_replica.arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "terraform_state_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.terraform_state_replica.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+data "aws_iam_policy_document" "replication_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["s3.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "replication" {
+  name               = "${var.state_bucket_name}-replication-role"
+  assume_role_policy = data.aws_iam_policy_document.replication_assume.json
+}
+
+data "aws_iam_policy_document" "replication" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetReplicationConfiguration",
+      "s3:ListBucket",
+    ]
+    resources = [
+      aws_s3_bucket.terraform_state.arn,
+      aws_s3_bucket.state_logs.arn,
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetObjectVersionForReplication",
+      "s3:GetObjectVersionAcl",
+      "s3:GetObjectVersionTagging",
+    ]
+    resources = [
+      "${aws_s3_bucket.terraform_state.arn}/*",
+      "${aws_s3_bucket.state_logs.arn}/*",
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:ReplicateObject",
+      "s3:ReplicateDelete",
+      "s3:ReplicateTags",
+    ]
+    resources = [
+      "${aws_s3_bucket.terraform_state_replica.arn}/*",
+      "${aws_s3_bucket.state_logs_replica.arn}/*",
+    ]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [aws_kms_key.state.arn]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["kms:Encrypt"]
+    resources = [aws_kms_key.state_replica.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "replication" {
+  name   = "${var.state_bucket_name}-replication-policy"
+  role   = aws_iam_role.replication.id
+  policy = data.aws_iam_policy_document.replication.json
+}
+
+resource "aws_s3_bucket_replication_configuration" "terraform_state" {
+  depends_on = [aws_s3_bucket_versioning.terraform_state, aws_s3_bucket_versioning.terraform_state_replica]
+
+  bucket = aws_s3_bucket.terraform_state.id
+  role   = aws_iam_role.replication.arn
+
+  rule {
+    id     = "replicate-state-to-secondary-region"
+    status = "Enabled"
+
+    destination {
+      bucket        = aws_s3_bucket.terraform_state_replica.arn
+      storage_class = "STANDARD"
+
+      encryption_configuration {
+        replica_kms_key_id = aws_kms_key.state_replica.arn
+      }
+    }
+
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+  }
+}
+
+resource "aws_s3_bucket_replication_configuration" "state_logs" {
+  depends_on = [aws_s3_bucket_versioning.state_logs, aws_s3_bucket_versioning.state_logs_replica]
+
+  bucket = aws_s3_bucket.state_logs.id
+  role   = aws_iam_role.replication.arn
+
+  rule {
+    id     = "replicate-logs-to-secondary-region"
+    status = "Enabled"
+
+    destination {
+      bucket        = aws_s3_bucket.state_logs_replica.arn
+      storage_class = "STANDARD"
+
+      encryption_configuration {
+        replica_kms_key_id = aws_kms_key.state_replica.arn
+      }
+    }
+
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+  }
 }
 
 resource "aws_dynamodb_table" "terraform_lock" {
