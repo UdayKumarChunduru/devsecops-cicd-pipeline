@@ -14,7 +14,7 @@
       kubernetes.core.k8s_info:
         kind: Deployment
         name: demo-service
-        namespace: default
+        namespace: devsecops-pipeline
       register: existing_deployment
 
     - name: Deploy a kyverno compliant placeholder if none exists
@@ -25,7 +25,7 @@
           kind: Deployment
           metadata:
             name: demo-service
-            namespace: default
+            namespace: devsecops-pipeline
           spec:
             replicas: 2
             selector:
@@ -59,7 +59,7 @@
     - name: Get a target pod
       kubernetes.core.k8s_info:
         kind: Pod
-        namespace: default
+        namespace: devsecops-pipeline
         label_selectors:
           - "app=demo-service"
       register: pods
@@ -77,7 +77,7 @@
     - name: Wait for the target pod to be deleted by the lambda
       kubernetes.core.k8s_info:
         kind: Pod
-        namespace: default
+        namespace: devsecops-pipeline
         name: "{{ target_pod }}"
       register: pod_check
       until: pod_check.resources | length == 0
@@ -87,7 +87,7 @@
     - name: Confirm a replacement pod is running
       kubernetes.core.k8s_info:
         kind: Pod
-        namespace: default
+        namespace: devsecops-pipeline
         label_selectors:
           - "app=demo-service"
         field_selectors:
