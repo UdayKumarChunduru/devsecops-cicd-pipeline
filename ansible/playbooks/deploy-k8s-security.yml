@@ -15,6 +15,11 @@
         cmd: "aws eks update-kubeconfig --name {{ tf_outputs.cluster_name.value }} --region {{ aws_region }}"
       changed_when: true
 
+    - name: Apply devsecops-pipeline namespace
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_dir }}/namespace.yaml"
+
     - name: Apply falco-remediator RBAC
       kubernetes.core.k8s:
         state: present
@@ -28,7 +33,7 @@
           kind: Role
           metadata:
             name: jenkins-deploy
-            namespace: default
+            namespace: devsecops-pipeline
           rules:
             - apiGroups: ["apps"]
               resources: ["deployments"]
@@ -45,7 +50,7 @@
           kind: RoleBinding
           metadata:
             name: jenkins-deploy-binding
-            namespace: default
+            namespace: devsecops-pipeline
           subjects:
             - kind: Group
               name: jenkins-deploy-group
@@ -54,6 +59,11 @@
             kind: Role
             name: jenkins-deploy
             apiGroup: rbac.authorization.k8s.io
+
+    - name: Apply demo-service network policy
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ k8s_dir }}/networkpolicy.yaml"
 
     - name: Add kyverno helm repo
       kubernetes.core.helm_repository:
