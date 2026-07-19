@@ -5,9 +5,9 @@ since a bucket that will hold remote state cannot itself be created using
 that same remote state.
 
 S3 bucket names are globally unique across all AWS accounts. If
-devsecops-pipeline-tfstate is already taken, override it:
+devsecops-pipeline-tfstate-fortecipher is already taken, override it:
 
-    terraform apply -var="state_bucket_name=devsecops-pipeline-tfstate-<account-id>"
+    terraform apply -var="state_bucket_name=devsecops-pipeline-tfstate-fortecipher-<account-id>"
 
 ## Run
 

@@ -5,12 +5,12 @@ variable "aws_region" {
 
 variable "state_bucket_name" {
   type    = string
-  default = "devsecops-pipeline-tfstate"
+  default = "devsecops-pipeline-tfstate-fortecipher"
 }
 
 variable "lock_table_name" {
   type    = string
-  default = "devsecops-pipeline-tfstate-lock"
+  default = "devsecops-pipeline-tfstate-fortecipher-lock"
 }
 
 variable "replica_region" {
