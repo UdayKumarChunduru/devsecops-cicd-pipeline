@@ -7,11 +7,15 @@ playbooks. No bash scripts, no manual CLI steps.
 
 ## One time setup
 
-    pip install ansible --break-system-packages
+    # Create and utilize an isolated virtual environment for all tooling
+    python3 -m venv .venv
+    .venv/bin/pip install --upgrade pip
+    .venv/bin/pip install ansible
     make galaxy-install
 
     cd terraform/bootstrap
     terraform init
+    terraform plan
     terraform apply
     cd ../..
 
