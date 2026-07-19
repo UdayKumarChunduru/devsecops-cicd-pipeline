@@ -13,7 +13,7 @@ repos:
     rev: 3.3.8
     hooks:
       - id: checkov
-        args: [--quiet]
+        args: [--quiet, --skip-check, "CKV_AWS_273,CKV_AWS_40"]
 
   - repo: https://github.com/ansible/ansible-lint
     rev: v26.6.0

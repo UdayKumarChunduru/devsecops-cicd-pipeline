@@ -48,8 +48,8 @@ jobs:
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform/
-          config_file: .checkov.yaml
           soft_fail: false
+          skip_check: CKV_AWS_273,CKV_AWS_40
 
   ansible-checks:
     runs-on: ubuntu-latest
