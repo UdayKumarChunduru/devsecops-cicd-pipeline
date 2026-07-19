@@ -17,7 +17,3 @@ variable "sns_topic_arn" {
 variable "sns_kms_key_arn" {
   type = string
 }
-
-variable "sns_kms_key_arn" {
-  type = string
-}
