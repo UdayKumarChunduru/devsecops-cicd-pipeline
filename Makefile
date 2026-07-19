@@ -1,10 +1,16 @@
 .PHONY: up down test infra jenkins k8s lambda vault-init galaxy-install lint docs
 
+VENV_DIR = .venv
+VENV_BIN = $(VENV_DIR)/bin
+PIP      = $(VENV_BIN)/pip
+ANSIBLE  = $(VENV_BIN)/ansible-playbook
+
 galaxy-install:
-	ansible-galaxy collection install -r ansible/requirements.yml
-	pip install boto3 botocore docker --break-system-packages
-	pip install -r aws/lambda/requirements-test.txt --break-system-packages
-	pip install flake8 --break-system-packages
+	@if [ ! -d "$(VENV_DIR)" ]; then python3 -m venv $(VENV_DIR); fi
+	$(PIP) install --upgrade pip
+	$(PIP) install boto3 botocore docker flake8 pytest
+	$(PIP) install -r aws/lambda/requirements-test.txt
+	$(VENV_BIN)/ansible-galaxy collection install -r ansible/requirements.yml
 
 vault-init:
 	@test -f ansible/group_vars/all/vault.yml || \
@@ -12,33 +18,33 @@ vault-init:
 		 echo "edit ansible/group_vars/all/vault.yml with real values, then run: ansible-vault encrypt ansible/group_vars/all/vault.yml")
 
 up: galaxy-install
-	cd ansible && ansible-playbook playbooks/site.yml --ask-vault-pass
+	cd ansible && ../$(ANSIBLE) playbooks/site.yml --ask-vault-pass
 
-infra:
-	cd ansible && ansible-playbook playbooks/provision-infra.yml
+infra: galaxy-install
+	cd ansible && ../$(ANSIBLE) playbooks/provision-infra.yml
 
-jenkins:
-	cd ansible && ansible-playbook playbooks/bootstrap-jenkins.yml --ask-vault-pass
+jenkins: galaxy-install
+	cd ansible && ../$(ANSIBLE) playbooks/bootstrap-jenkins.yml --ask-vault-pass
 
-k8s:
-	cd ansible && ansible-playbook playbooks/deploy-k8s-security.yml
+k8s: galaxy-install
+	cd ansible && ../$(ANSIBLE) playbooks/deploy-k8s-security.yml
 
-lambda:
-	cd ansible && ansible-playbook playbooks/deploy-lambda.yml
+lambda: galaxy-install
+	cd ansible && ../$(ANSIBLE) playbooks/deploy-lambda.yml
 
-test:
-	cd ansible && ansible-playbook playbooks/test-quarantine.yml
+test: galaxy-install
+	cd ansible && ../$(ANSIBLE) playbooks/test-quarantine.yml
 
-down:
-	cd ansible && ansible-playbook playbooks/teardown.yml
+down: galaxy-install
+	cd ansible && ../$(ANSIBLE) playbooks/teardown.yml
 
-lint:
+lint: galaxy-install
 	terraform fmt -check -recursive terraform/
 	cd terraform/environments/aws && terraform init -backend=false && terraform validate
 	tflint --chdir=terraform/environments/aws --init
 	tflint --chdir=terraform/environments/aws
 	checkov -d terraform/ --quiet
-	ansible-lint ansible/playbooks/*.yml
+	$(VENV_BIN)/ansible-lint ansible/playbooks/*.yml
 
 docs:
 	terraform-docs markdown table terraform/modules/vpc > terraform/modules/vpc/README.md
