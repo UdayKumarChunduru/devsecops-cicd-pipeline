@@ -7,11 +7,11 @@ playbooks. No bash scripts, no manual CLI steps.
 
 ## One time setup
 
-    # Create and utilize an isolated virtual environment for all tooling
-    python3 -m venv .venv
-    .venv/bin/pip install --upgrade pip
-    .venv/bin/pip install ansible
     make galaxy-install
+
+Creates a local `.venv`, installs ansible, ansible-lint, the aws
+python dependencies, and every ansible collection this branch needs.
+Nothing installs anything system wide.
 
     cd terraform/bootstrap
     terraform init
