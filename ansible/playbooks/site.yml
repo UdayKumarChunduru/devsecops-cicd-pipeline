@@ -1,18 +1,18 @@
 ---
-- name: Full devsecops-pipeline terraform-aws provisioning
+- name: Check required tools and credentials
   import_playbook: preflight.yml
 
 - name: Provision infra
   import_playbook: provision-infra.yml
-
-- name: Bootstrap jenkins and sonarqube
-  import_playbook: bootstrap-jenkins.yml
 
 - name: Deploy kubernetes rbac, kyverno, falco
   import_playbook: deploy-k8s-security.yml
 
 - name: Package and deploy lambda, subscribe to sns
   import_playbook: deploy-lambda.yml
+
+- name: Bootstrap jenkins and sonarqube
+  import_playbook: bootstrap-jenkins.yml
 
 - name: Run end to end quarantine test
   import_playbook: test-quarantine.yml
