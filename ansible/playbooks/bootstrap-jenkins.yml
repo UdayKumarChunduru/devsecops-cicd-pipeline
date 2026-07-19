@@ -1,5 +1,4 @@
 ---
-# checkov:skip=CKV2_ANSIBLE_1:every uri task in this playbook targets 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine so tls adds no real protection here, fronting both with a local reverse proxy just for this check is not worth the added moving part for a project of this scope
 - name: Bootstrap Jenkins and SonarQube
   hosts: local
   gather_facts: false
@@ -38,6 +37,7 @@
         services: [sonarqube]
         state: present
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Wait for sonarqube to respond
       ansible.builtin.uri:
         url: "http://localhost:9000/api/system/status"
@@ -48,6 +48,7 @@
       delay: 5
       ignore_errors: true
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Check if the generated sonar password already works
       ansible.builtin.uri:
         url: "http://localhost:9000/api/authentication/validate"
@@ -57,6 +58,7 @@
         status_code: 200
       register: sonar_login_check
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Change sonarqube default admin password
       ansible.builtin.uri:
         url: "http://localhost:9000/api/users/change_password"
@@ -72,6 +74,7 @@
         status_code: [200, 204]
       when: not sonar_login_check.json.valid
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Revoke any existing jenkins sonar token
       ansible.builtin.uri:
         url: "http://localhost:9000/api/user_tokens/revoke"
@@ -85,6 +88,7 @@
         status_code: [200, 204]
       failed_when: false
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Generate a fresh sonar token for jenkins
       ansible.builtin.uri:
         url: "http://localhost:9000/api/user_tokens/generate"
@@ -102,6 +106,7 @@
       ansible.builtin.set_fact:
         sonar_token: "{{ sonar_token_response.json.token }}"
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: List existing sonarqube webhooks
       ansible.builtin.uri:
         url: "http://localhost:9000/api/webhooks/list"
@@ -111,6 +116,7 @@
         status_code: 200
       register: sonar_webhooks
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Create jenkins webhook in sonarqube
       ansible.builtin.uri:
         url: "http://localhost:9000/api/webhooks/create"
@@ -150,6 +156,7 @@
         build: always
         state: present
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Wait for jenkins to respond
       ansible.builtin.uri:
         url: "http://localhost:8080/login"
@@ -159,6 +166,7 @@
       retries: 30
       delay: 5
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Fetch jenkins csrf crumb
       ansible.builtin.uri:
         url: "http://localhost:8080/crumbIssuer/api/json"
@@ -168,6 +176,7 @@
         status_code: 200
       register: crumb_response
 
+    # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
     - name: Trigger the devsecops-pipeline build
       ansible.builtin.uri:
         url: "http://localhost:8080/job/devsecops-pipeline/build"
