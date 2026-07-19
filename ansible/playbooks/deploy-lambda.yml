@@ -12,13 +12,13 @@
 
     - name: Lint the lambda code
       ansible.builtin.command:
-        cmd: python3 -m flake8 falco_remediation.py tests/ --max-line-length=100 --ignore=E501,W503
+        cmd: "{{ project_root }}/.venv/bin/python3 -m flake8 falco_remediation.py tests/ --max-line-length=100 --ignore=E501,W503"
         chdir: "{{ lambda_dir }}"
       changed_when: false
 
     - name: Run the lambda test suite
       ansible.builtin.command:
-        cmd: python3 -m pytest tests/ -v
+        cmd: "{{ project_root }}/.venv/bin/python3 -m pytest tests/ -v"
         chdir: "{{ lambda_dir }}"
       changed_when: false
 
@@ -37,7 +37,7 @@
       ansible.builtin.pip:
         name: kubernetes
         extra_args: "--target {{ lambda_dir }}/lambda-package"
-        executable: pip3
+        executable: "{{ project_root }}/.venv/bin/pip3"
 
     - name: Copy handler code into package directory
       ansible.builtin.copy:
