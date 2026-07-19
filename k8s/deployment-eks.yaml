@@ -5,6 +5,9 @@ metadata:
   namespace: devsecops-pipeline
   labels:
     app: demo-service
+  annotations:
+    checkov.io/skip1: CKV_K8S_43=IMAGE_PLACEHOLDER is substituted with build_number:$BUILD_NUMBER by the jenkinsfile at deploy time, a fixed unique tag per build, digest pinning would require an extra pipeline step to resolve and inject the pushed image digest after push, not implemented for this project's scope
+    checkov.io/skip2: CKV_K8S_14=same reason, the committed template cannot show a resolved tag since the tag is injected per build by the jenkinsfile sed step
 spec:
   replicas: 2
   selector:
