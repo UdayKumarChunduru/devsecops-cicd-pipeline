@@ -10,7 +10,8 @@ git \
 maven \
 docker.io \
 python3 \
-python3-pip && \
+python3-pip \
+python3-venv && \
 rm -rf /var/lib/apt/lists/*
 
 RUN curl -sLO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && \
