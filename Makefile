@@ -8,6 +8,7 @@ ANSIBLE  = $(VENV_BIN)/ansible-playbook
 galaxy-install:
 	@if [ ! -d "$(VENV_DIR)" ]; then python3 -m venv $(VENV_DIR); fi
 	$(PIP) install --upgrade pip
+	$(PIP) install ansible ansible-lint==26.6.0
 	$(PIP) install boto3 botocore docker flake8 pytest
 	$(PIP) install -r aws/lambda/requirements-test.txt
 	$(VENV_BIN)/ansible-galaxy collection install -r ansible/requirements.yml
