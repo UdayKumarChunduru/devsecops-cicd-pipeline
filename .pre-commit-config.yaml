@@ -8,9 +8,13 @@ repos:
       - id: terraform_fmt
       - id: terraform_validate
       - id: terraform_tflint
-      - id: terraform_checkov
-        args:
-          - --args=--quiet
+
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.3.8
+    hooks:
+      - id: checkov
+        args: [--quiet]
+
   - repo: https://github.com/ansible/ansible-lint
     rev: v26.6.0
     hooks:
@@ -21,7 +25,9 @@ repos:
           - botocore
           - docker
           - kubernetes
+        entry: bash -c 'ansible-galaxy collection install -r ansible/requirements.yml && ansible-lint'
         files: ^ansible/.*\.(yml|yaml)$
+
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
