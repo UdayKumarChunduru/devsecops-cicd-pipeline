@@ -64,7 +64,7 @@
         memory_size: 256
         environment_variables:
           EKS_CLUSTER_NAME: "{{ tf_outputs.cluster_name.value }}"
-          TARGET_NAMESPACE: default
+          TARGET_NAMESPACE: devsecops-pipeline
 
     - name: Get the lambda function arn
       amazon.aws.lambda_info:
