@@ -72,7 +72,7 @@
       community.aws.sns:
         topic: "{{ tf_outputs.sns_topic_arn.value }}"
         region: "{{ aws_region }}"
-        msg: "{{ {'priority': 'Critical', 'rule': 'Privilege Escalation In Demo Container', 'output_fields': {'k8s.pod.name': target_pod, 'k8s.ns.name': 'default'}} | to_json }}"
+        msg: "{{ {'priority': 'Critical', 'rule': 'Privilege Escalation In Demo Container', 'output_fields': {'k8s.pod.name': target_pod, 'k8s.ns.name': 'devsecops-pipeline'}} | to_json }}"
 
     - name: Wait for the target pod to be deleted by the lambda
       kubernetes.core.k8s_info:
