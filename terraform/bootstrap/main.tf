@@ -159,6 +159,27 @@ resource "aws_s3_bucket_public_access_block" "state_logs_replica" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_notification" "state_logs_replica" {
+  provider    = aws.replica
+  bucket      = aws_s3_bucket.state_logs_replica.id
+  eventbridge = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "state_logs_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.state_logs_replica.id
+  rule {
+    id     = "expire-old-logs"
+    status = "Enabled"
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+    expiration {
+      days = 90
+    }
+  }
+}
+
 resource "aws_s3_bucket" "terraform_state" {
   bucket = var.state_bucket_name
 
@@ -252,6 +273,34 @@ resource "aws_s3_bucket_public_access_block" "terraform_state_replica" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_logging" "terraform_state_replica" {
+  provider      = aws.replica
+  bucket        = aws_s3_bucket.terraform_state_replica.id
+  target_bucket = aws_s3_bucket.state_logs_replica.id
+  target_prefix = "state-bucket-access-logs/"
+}
+
+resource "aws_s3_bucket_notification" "terraform_state_replica" {
+  provider    = aws.replica
+  bucket      = aws_s3_bucket.terraform_state_replica.id
+  eventbridge = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "terraform_state_replica" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.terraform_state_replica.id
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
 }
 
 data "aws_iam_policy_document" "replication_assume" {
