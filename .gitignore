@@ -32,3 +32,4 @@ jenkins/casc.yaml
 docker-compose.yml
 
 infracost-report.txt
+.ansible/
