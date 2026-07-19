@@ -2,3 +2,5 @@ skip_list:
   - yaml[line-length]
 exclude_paths:
   - ansible/group_vars/all/vault.yml
+  - .venv/
+  - .terraform/
