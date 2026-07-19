@@ -43,9 +43,17 @@ pipeline {
             steps {
                 dir('aws/lambda') {
                     sh '''
-                      pip install --break-system-packages --quiet flake8 -r requirements-test.txt
-                      flake8 falco_remediation.py tests/ --max-line-length=100 --ignore=E501,W503
-                      python3 -m pytest tests/ -v
+                      if [ ! -d ".venv" ]; then
+                          python3 -m venv .venv
+                      fi
+
+                      VENV_BIN=".venv/bin"
+
+                      $VENV_BIN/pip install --upgrade pip --quiet
+                      $VENV_BIN/pip install --quiet flake8 -r requirements-test.txt
+
+                      $VENV_BIN/flake8 falco_remediation.py tests/ --max-line-length=100 --ignore=E501,W503
+                      $VENV_BIN/python3 -m pytest tests/ -v
                     '''
                 }
             }
