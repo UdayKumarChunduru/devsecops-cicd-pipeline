@@ -16,5 +16,5 @@ output "jenkins_secret_access_key" {
 }
 
 output "falcosidekick_irsa_role_arn" {
-  value = module.falcosidekick_irsa.iam_role_arn
+  value = module.falcosidekick_irsa.arn
 }
