@@ -17,6 +17,7 @@
         - helm
         - zip
         - python3
+        - docker
 
     - name: Check aws credentials are configured
       ansible.builtin.command:
