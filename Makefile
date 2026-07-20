@@ -1,55 +1,91 @@
-.PHONY: up down test infra jenkins k8s lambda vault-init vault-encrypt galaxy-install lint docs
+.PHONY: up down test infra jenkins k8s lambda vault-init vault-encrypt vault-reset galaxy-install preflight lint docs
 
 VENV_DIR = .venv
 VENV_BIN = $(VENV_DIR)/bin
-PIP      = $(VENV_BIN)/pip
 ANSIBLE  = $(VENV_BIN)/ansible-playbook
 VAULT_PASS_FILE = .vault_pass
 STAMP = $(VENV_DIR)/.installed
+ANSIBLE_ARGS ?= -v
 
 $(VAULT_PASS_FILE):
+	@echo "[VAULT] no vault password file found at $(VAULT_PASS_FILE), generating one"
 	@openssl rand -base64 32 > $(VAULT_PASS_FILE)
 	@chmod 600 $(VAULT_PASS_FILE)
+	@echo "[VAULT] vault password file created at $(VAULT_PASS_FILE)"
 
 $(STAMP):
-	@python3 -m venv $(VENV_DIR)
-	@$(PIP) install --quiet --upgrade pip
-	@$(PIP) install --quiet ansible ansible-lint==26.6.0
-	@$(PIP) install --quiet boto3 botocore docker flake8 pytest
-	@$(PIP) install --quiet -r aws/lambda/requirements-test.txt
+	@if [ -d "$(VENV_DIR)" ]; then \
+		echo "[VENV] existing virtualenv found at $(VENV_DIR), reusing it"; \
+	else \
+		echo "[VENV] no virtualenv found, creating one at $(VENV_DIR)"; \
+		python3 -m venv $(VENV_DIR); \
+		echo "[VENV] virtualenv created at $(VENV_DIR)"; \
+	fi
+	@bash scripts/venv-install.sh $(VENV_BIN) ansible ansible-lint==26.6.0 boto3 botocore docker flake8 pytest -r aws/lambda/requirements-test.txt
+	@echo "[GALAXY] checking ansible collections against ansible/requirements.yml"
 	@$(VENV_BIN)/ansible-galaxy collection install -r ansible/requirements.yml
 	@touch $(STAMP)
+	@echo "[VENV] setup complete"
 
 galaxy-install: $(STAMP)
 
+preflight: galaxy-install
+	@echo "[PREFLIGHT] verifying terraform, aws, kubectl, helm, zip, python3, docker and aws credentials"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/preflight.yml
+	@echo "[PREFLIGHT] all required tools present, aws identity confirmed"
+
 vault-init: galaxy-install $(VAULT_PASS_FILE)
-	@test -f ansible/group_vars/all/vault.yml || \
-		(cp ansible/group_vars/all/vault.yml.example ansible/group_vars/all/vault.yml && \
-		 echo "edit ansible/group_vars/all/vault.yml, set your snyk token, then run: make vault-encrypt")
+	@if [ -f ansible/group_vars/all/vault.yml ]; then \
+		echo "[VAULT] ansible/group_vars/all/vault.yml already exists, leaving it untouched"; \
+	else \
+		cp ansible/group_vars/all/vault.yml.example ansible/group_vars/all/vault.yml; \
+		echo "[VAULT] created ansible/group_vars/all/vault.yml from the example template"; \
+		echo "[VAULT] edit it now with your real snyk token, then run: make vault-encrypt"; \
+	fi
 
 vault-encrypt: $(VAULT_PASS_FILE)
-	$(VENV_BIN)/ansible-vault encrypt ansible/group_vars/all/vault.yml --vault-password-file $(VAULT_PASS_FILE)
+	@if grep -q '^\$$ANSIBLE_VAULT' ansible/group_vars/all/vault.yml 2>/dev/null; then \
+		echo "[VAULT] vault.yml is already encrypted, nothing to do"; \
+	else \
+		$(VENV_BIN)/ansible-vault encrypt ansible/group_vars/all/vault.yml --vault-password-file $(VAULT_PASS_FILE); \
+		echo "[VAULT] vault.yml encrypted successfully with $(VAULT_PASS_FILE)"; \
+	fi
 
-up: galaxy-install $(VAULT_PASS_FILE)
-	cd ansible && ../$(ANSIBLE) playbooks/site.yml --vault-password-file ../$(VAULT_PASS_FILE)
+vault-reset:
+	@echo "[VAULT] recreating vault.yml from the example template, any values in the current encrypted file are lost unless saved elsewhere"
+	@rm -f ansible/group_vars/all/vault.yml
+	@cp ansible/group_vars/all/vault.yml.example ansible/group_vars/all/vault.yml
+	@echo "[VAULT] vault.yml reset, edit it and run make vault-encrypt again"
 
-infra: galaxy-install
-	cd ansible && ../$(ANSIBLE) playbooks/provision-infra.yml
+up: preflight $(VAULT_PASS_FILE)
+	@echo "[PROVISION] running full stack: state backend, terraform infra, kubernetes security stack, lambda, jenkins, quarantine test"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/site.yml --vault-password-file ../$(VAULT_PASS_FILE)
+	@echo "[PROVISION] complete, run cat .pipeline-credentials for jenkins and sonarqube logins"
 
-jenkins: galaxy-install $(VAULT_PASS_FILE)
-	cd ansible && ../$(ANSIBLE) playbooks/bootstrap-jenkins.yml --vault-password-file ../$(VAULT_PASS_FILE)
+infra: preflight
+	@echo "[INFRA] applying terraform state backend then the real environment"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/provision-infra.yml
 
-k8s: galaxy-install
-	cd ansible && ../$(ANSIBLE) playbooks/deploy-k8s-security.yml
+jenkins: preflight $(VAULT_PASS_FILE)
+	@echo "[JENKINS] bootstrapping sonarqube and jenkins with configuration as code"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/bootstrap-jenkins.yml --vault-password-file ../$(VAULT_PASS_FILE)
 
-lambda: galaxy-install
-	cd ansible && ../$(ANSIBLE) playbooks/deploy-lambda.yml
+k8s: preflight
+	@echo "[K8S] applying rbac, kyverno policies and falco"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/deploy-k8s-security.yml
 
-test: galaxy-install
-	cd ansible && ../$(ANSIBLE) playbooks/test-quarantine.yml
+lambda: preflight
+	@echo "[LAMBDA] packaging and deploying the remediation function"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/deploy-lambda.yml
+
+test: preflight
+	@echo "[TEST] running the falco quarantine end to end test"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/test-quarantine.yml
 
 down: galaxy-install
-	cd ansible && ../$(ANSIBLE) playbooks/teardown.yml
+	@echo "[TEARDOWN] destroying every cloud and local resource this branch created"
+	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/teardown.yml
+	@echo "[TEARDOWN] complete, verify with aws eks list-clusters, aws ecr describe-repositories, aws lambda list-functions"
 
 lint: galaxy-install
 	terraform fmt -check -recursive terraform/
