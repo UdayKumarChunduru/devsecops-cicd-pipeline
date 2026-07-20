@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: infracost/actions/setup@v3
+      - uses: infracost/actions/setup@v4
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
