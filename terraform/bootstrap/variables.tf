@@ -8,10 +8,6 @@ variable "state_bucket_name" {
   default = "devsecops-pipeline-tfstate-fortecipher"
 }
 
-variable "lock_table_name" {
-  type    = string
-  default = "devsecops-pipeline-tfstate-fortecipher-lock"
-}
 
 variable "replica_region" {
   type    = string
