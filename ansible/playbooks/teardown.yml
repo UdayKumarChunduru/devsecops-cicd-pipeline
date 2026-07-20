@@ -74,6 +74,26 @@
         - "{{ project_root }}/jenkins/casc.yaml"
         - "{{ project_root }}/.pipeline-credentials"
 
+    - name: Remove local tooling caches and terraform metadata
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ project_root }}/.venv"
+        - "{{ project_root }}/.ansible"
+
+    - name: Remove terraform metadata recursively
+      ansible.builtin.shell: |
+        find "{{ project_root }}/terraform" -type d -name ".terraform" -prune -exec rm -rf {} +
+        find "{{ project_root }}/terraform" -name ".terraform.lock.hcl" -delete
+      register: terraform_cleanup
+      changed_when: terraform_cleanup.rc == 0
+      failed_when: false
+
+    - name: Report local cleanup complete
+      ansible.builtin.debug:
+        msg: "removed .venv, .ansible, and all terraform metadata (.terraform directories and lock files). vault.yml and .vault_pass are kept intentionally so your snyk token and vault encryption survive across sessions"
+
     - name: Find and remove pycache and pytest cache directories
       ansible.builtin.shell: |
         find "{{ project_root }}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
