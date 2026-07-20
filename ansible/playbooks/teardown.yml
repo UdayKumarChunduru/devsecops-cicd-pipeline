@@ -55,6 +55,12 @@
         chdir: "{{ terraform_dir }}"
       changed_when: true
 
+    - name: Destroy state backend bootstrap resources
+      ansible.builtin.command:
+        cmd: terraform destroy -auto-approve -input=false
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      changed_when: true
+
     - name: Remove local build artifacts and generated secrets
       ansible.builtin.file:
         path: "{{ item }}"
@@ -66,6 +72,7 @@
         - "{{ project_root }}/.secrets/jenkins_admin_password"
         - "{{ project_root }}/.secrets/sonar_admin_password"
         - "{{ project_root }}/jenkins/casc.yaml"
+        - "{{ project_root }}/.pipeline-credentials"
 
     - name: Find and remove pycache and pytest cache directories
       ansible.builtin.shell: |
