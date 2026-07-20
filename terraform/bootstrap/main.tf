@@ -75,7 +75,8 @@ resource "aws_kms_alias" "state_replica" {
 }
 
 resource "aws_s3_bucket" "state_logs" {
-  bucket = "${var.state_bucket_name}-logs"
+  bucket        = "${var.state_bucket_name}-logs"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "state_logs" {
@@ -125,8 +126,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "state_logs" {
 }
 
 resource "aws_s3_bucket" "state_logs_replica" {
-  provider = aws.replica
-  bucket   = "${var.state_bucket_name}-logs-replica"
+  provider      = aws.replica
+  bucket        = "${var.state_bucket_name}-logs-replica"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "state_logs_replica" {
@@ -181,11 +183,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "state_logs_replica" {
 }
 
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = var.state_bucket_name
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  bucket        = var.state_bucket_name
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "terraform_state" {
@@ -241,8 +240,9 @@ resource "aws_s3_bucket_notification" "terraform_state" {
 }
 
 resource "aws_s3_bucket" "terraform_state_replica" {
-  provider = aws.replica
-  bucket   = "${var.state_bucket_name}-replica"
+  provider      = aws.replica
+  bucket        = "${var.state_bucket_name}-replica"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "terraform_state_replica" {
@@ -432,22 +432,3 @@ resource "aws_s3_bucket_replication_configuration" "state_logs" {
   }
 }
 
-resource "aws_dynamodb_table" "terraform_lock" {
-  name         = var.lock_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-
-  server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.state.arn
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-}
