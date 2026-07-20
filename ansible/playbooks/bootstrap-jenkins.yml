@@ -44,8 +44,8 @@
         status_code: [200, 404, 500, 503]
       register: sonar_status
       until: sonar_status.status == 200 and sonar_status.json is defined and sonar_status.json.status is defined and sonar_status.json.status == "UP"
-      retries: 30
-      delay: 5
+      retries: 60
+      delay: 10
       ignore_errors: true
 
     - name: Check if the generated sonar password already works
@@ -57,6 +57,9 @@
         force_basic_auth: true
         status_code: 200
       register: sonar_login_check
+      retries: 5
+      delay: 5
+      until: sonar_login_check.status == 200
 
     - name: Change sonarqube default admin password
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
@@ -163,8 +166,8 @@
         status_code: 200
       register: jenkins_up
       until: jenkins_up.status == 200
-      retries: 30
-      delay: 5
+      retries: 60
+      delay: 10
 
     - name: Fetch jenkins csrf crumb
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
@@ -187,3 +190,18 @@
         headers:
           "{{ crumb_response.json.crumbRequestField }}": "{{ crumb_response.json.crumb }}"
         status_code: 201
+
+    - name: Write local credentials summary file
+      ansible.builtin.copy:
+        dest: "{{ project_root }}/.pipeline-credentials"
+        mode: "0600"
+        content: |
+          JENKINS_URL=http://localhost:8080
+          JENKINS_ADMIN_USER={{ vault_jenkins_admin_user }}
+          JENKINS_ADMIN_PASSWORD={{ jenkins_admin_password }}
+          SONARQUBE_URL=http://localhost:9000
+          SONAR_ADMIN_USER=admin
+          SONAR_ADMIN_PASSWORD={{ sonar_admin_password }}
+          SONAR_TOKEN={{ sonar_token }}
+          AWS_ACCOUNT_ID={{ tf_outputs.aws_account_id.value }}
+          AWS_JENKINS_ACCESS_KEY_ID={{ tf_outputs.jenkins_access_key_id.value }}
