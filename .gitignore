@@ -33,3 +33,7 @@ docker-compose.yml
 
 infracost-report.txt
 .ansible/
+.terraform.lock.hcl
+__pycache__/
+.pipeline-credentials
+.venv/
