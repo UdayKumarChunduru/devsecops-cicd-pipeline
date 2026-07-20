@@ -61,6 +61,36 @@
       delay: 5
       until: sonar_login_check.status == 200
 
+    - name: Report stored sonar password state
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'stored sonarqube password already valid, skipping password change'
+          if sonar_login_check.json.valid
+          else 'stored sonarqube password not valid, checking default admin credential next' }}
+
+    - name: Check if the sonarqube default admin credential still works
+      # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
+      ansible.builtin.uri:
+        url: "http://localhost:9000/api/authentication/validate"
+        url_username: admin
+        url_password: admin
+        force_basic_auth: true
+        status_code: 200
+      register: sonar_default_check
+      when: not sonar_login_check.json.valid
+
+    - name: Fail loudly if neither the stored nor the default sonar credential is valid
+      ansible.builtin.fail:
+        msg: >
+          sonarqube admin password is in an unknown state. neither the password stored in
+          .secrets/sonar_admin_password nor the default admin/admin credential is accepted.
+          this happens when the sonarqube_data docker volume survived from an earlier
+          session while .secrets/sonar_admin_password was deleted or regenerated separately.
+          fix: docker compose down -v to drop the sonarqube_data volume, then rerun make jenkins.
+      when:
+        - not sonar_login_check.json.valid
+        - not sonar_default_check.json.valid
+
     - name: Change sonarqube default admin password
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
       ansible.builtin.uri:
@@ -75,7 +105,16 @@
           previousPassword: admin
           password: "{{ sonar_admin_password }}"
         status_code: [200, 204]
-      when: not sonar_login_check.json.valid
+      when:
+        - not sonar_login_check.json.valid
+        - sonar_default_check.json.valid
+
+    - name: Confirm the sonar password change took effect
+      ansible.builtin.debug:
+        msg: "sonarqube admin password changed successfully from default to the value stored in .secrets/sonar_admin_password"
+      when:
+        - not sonar_login_check.json.valid
+        - sonar_default_check.json.valid
 
     - name: Revoke any existing jenkins sonar token
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
