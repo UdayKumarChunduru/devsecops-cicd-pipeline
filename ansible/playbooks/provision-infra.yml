@@ -6,6 +6,19 @@
     - ../group_vars/all/vars.yml
 
   tasks:
+    - name: Run terraform init for state backend bootstrap
+      ansible.builtin.command:
+        cmd: terraform init -input=false
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      changed_when: true
+
+    - name: Run terraform apply for state backend bootstrap
+      ansible.builtin.command:
+        cmd: terraform apply -auto-approve -input=false
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      register: tf_bootstrap_apply
+      changed_when: "'Apply complete' in tf_bootstrap_apply.stdout"
+
     - name: Run terraform init
       ansible.builtin.command:
         cmd: terraform init -input=false
