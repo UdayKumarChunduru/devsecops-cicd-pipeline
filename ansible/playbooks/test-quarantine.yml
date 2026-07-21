@@ -7,6 +7,7 @@
 
   tasks:
     - name: Load terraform outputs
+      no_log: true
       ansible.builtin.set_fact:
         tf_outputs: "{{ lookup('file', project_root + '/.terraform-outputs.json') | from_json }}"
 
