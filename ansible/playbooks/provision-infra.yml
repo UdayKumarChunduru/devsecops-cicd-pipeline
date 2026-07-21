@@ -33,6 +33,7 @@
       changed_when: "'Apply complete' in tf_apply.stdout"
 
     - name: Read terraform outputs as json
+      no_log: true
       ansible.builtin.command:
         cmd: terraform output -json
         chdir: "{{ terraform_dir }}"
@@ -40,6 +41,7 @@
       changed_when: false
 
     - name: Parse terraform outputs
+      no_log: true
       ansible.builtin.set_fact:
         tf_outputs: "{{ tf_outputs_raw.stdout | from_json }}"
 
