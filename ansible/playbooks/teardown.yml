@@ -73,6 +73,7 @@
         - "{{ lambda_dir }}/falco_remediation.zip"
         - "{{ project_root }}/.terraform-outputs.json"
         - "{{ project_root }}/.secrets"
+        - "{{ project_root }}/jenkins/casc.yaml"
         - "{{ project_root }}/.pipeline-credentials"
         - "{{ project_root }}/.ansible"
 
