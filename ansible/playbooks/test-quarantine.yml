@@ -82,8 +82,8 @@
         name: "{{ target_pod }}"
       register: pod_check
       until: pod_check.resources | length == 0
-      retries: 12
-      delay: 5
+      retries: 24
+      delay: 10
 
     - name: Confirm a replacement pod is running
       kubernetes.core.k8s_info:

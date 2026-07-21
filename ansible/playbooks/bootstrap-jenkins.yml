@@ -18,10 +18,12 @@
         mode: "0700"
 
     - name: Generate or read jenkins admin password
+      no_log: true
       ansible.builtin.set_fact:
         jenkins_admin_password: "{{ lookup('ansible.builtin.password', project_root + '/.secrets/jenkins_admin_password', chars=['ascii_letters', 'digits', '!@%^&*_-+=']) }}"
 
     - name: Generate or read sonarqube admin password
+      no_log: true
       ansible.builtin.set_fact:
         sonar_admin_password: "{{ lookup('ansible.builtin.password', project_root + '/.secrets/sonar_admin_password', chars=['ascii_letters', 'digits', '!@%^&*_-+=']) }}"
 
@@ -93,6 +95,7 @@
 
     - name: Change sonarqube default admin password
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
+      no_log: true
       ansible.builtin.uri:
         url: "http://localhost:9000/api/users/change_password"
         method: POST
@@ -132,6 +135,7 @@
 
     - name: Generate a fresh sonar token for jenkins
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
+      no_log: true
       ansible.builtin.uri:
         url: "http://localhost:9000/api/user_tokens/generate"
         method: POST
@@ -210,6 +214,7 @@
 
     - name: Fetch jenkins csrf crumb
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
+      no_log: true
       ansible.builtin.uri:
         url: "http://localhost:8080/crumbIssuer/api/json"
         url_username: "{{ vault_jenkins_admin_user }}"
@@ -218,8 +223,19 @@
         status_code: 200
       register: crumb_response
 
+    - name: Confirm the pipeline job exists before triggering
+      ansible.builtin.uri:
+        url: "http://localhost:8080/job/devsecops-pipeline/api/json"
+        url_username: "{{ vault_jenkins_admin_user }}"
+        url_password: "{{ jenkins_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      no_log: true
+      register: job_exists_check
+
     - name: Trigger the devsecops-pipeline build
       # checkov:skip=CKV2_ANSIBLE_1:target is 127.0.0.1 only, jenkins and sonarqube are local docker containers on the same host running this playbook, traffic never leaves the machine
+      no_log: true
       ansible.builtin.uri:
         url: "http://localhost:8080/job/devsecops-pipeline/build"
         method: POST
@@ -228,9 +244,12 @@
         force_basic_auth: true
         headers:
           "{{ crumb_response.json.crumbRequestField }}": "{{ crumb_response.json.crumb }}"
-        status_code: 201
+        status_code: [201, 302]
+      register: build_trigger_result
+      failed_when: build_trigger_result.status not in [201, 302]
 
     - name: Write local credentials summary file
+      no_log: true
       ansible.builtin.copy:
         dest: "{{ project_root }}/.pipeline-credentials"
         mode: "0600"

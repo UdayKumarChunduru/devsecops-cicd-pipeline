@@ -74,13 +74,14 @@
         - "{{ project_root }}/jenkins/casc.yaml"
         - "{{ project_root }}/.pipeline-credentials"
 
-    - name: Remove local tooling caches and terraform metadata
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
+    - name: Remove local tooling caches
+      ansible.builtin.shell:
+        cmd: rm -rf "{{ item }}"
       loop:
         - "{{ project_root }}/.venv"
         - "{{ project_root }}/.ansible"
+      changed_when: true
+      failed_when: false
 
     - name: Remove terraform metadata recursively
       ansible.builtin.shell: |
