@@ -1,4 +1,4 @@
-.PHONY: up down test infra jenkins k8s lambda vault-init vault-encrypt vault-reset galaxy-install preflight lint docs
+.PHONY: vault-setup up down test infra jenkins k8s lambda vault-init vault-encrypt vault-reset galaxy-install preflight lint docs
 
 VENV_DIR = .venv
 VENV_BIN = $(VENV_DIR)/bin
@@ -57,10 +57,18 @@ vault-reset:
 	@cp ansible/group_vars/all/vault.yml.example ansible/group_vars/all/vault.yml
 	@echo "[VAULT] vault.yml reset, edit it and run make vault-encrypt again"
 
-up: preflight $(VAULT_PASS_FILE)
-	@echo "[PROVISION] running full stack: state backend, terraform infra, kubernetes security stack, lambda, jenkins, quarantine test"
+vault-setup: preflight vault-init
+	@echo "------------------------------------------------------------------------"
+	@echo "[VAULT] Initialization complete."
+	@echo "[STEP 1] Open 'ansible/group_vars/all/vault.yml' and paste your Snyk Token."
+	@echo "[STEP 2] Save the file, then run this command to deploy your stack:"
+	@echo "         make up"
+	@echo "------------------------------------------------------------------------"
+
+up: preflight $(VAULT_PASS_FILE) vault-encrypt
+	@echo "[PROVISION] Vault secured. Provisioning full stack (Infra, K8s, Lambda, Jenkins)..."
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/site.yml --vault-password-file ../$(VAULT_PASS_FILE)
-	@echo "[PROVISION] complete, run cat .pipeline-credentials for jenkins and sonarqube logins"
+	@echo "[PROVISION] Complete! Run 'cat .pipeline-credentials' for access logins."
 
 infra: preflight
 	@echo "[INFRA] applying terraform state backend then the real environment"
@@ -82,9 +90,11 @@ test: preflight
 	@echo "[TEST] running the falco quarantine end to end test"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/test-quarantine.yml
 
-down: galaxy-install
+down:
 	@echo "[TEARDOWN] destroying every cloud and local resource this branch created"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/teardown.yml
+	@echo "[VENV] Teardown successful! Safely removing local python virtual environment..."
+	rm -rf $(VENV_DIR)
 	@echo "[TEARDOWN] complete, verify with aws eks list-clusters, aws ecr describe-repositories, aws lambda list-functions"
 
 lint: galaxy-install

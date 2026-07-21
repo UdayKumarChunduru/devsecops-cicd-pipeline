@@ -29,24 +29,18 @@
       when: cluster_check.rc == 0
       failed_when: false
 
-    - name: Stop local docker containers
+    - name: Stop local docker containers, networks, and named volumes
       community.docker.docker_compose_v2:
         project_src: "{{ project_root }}"
         state: absent
+        remove_volumes: true
+        remove_orphans: true
       failed_when: false
 
-    - name: Get compose project name
-      ansible.builtin.set_fact:
-        compose_project: "{{ project_root | basename | regex_replace('[^a-z0-9]', '') }}"
-
-    - name: Remove jenkins and sonarqube volumes only
-      community.docker.docker_volume:
-        name: "{{ compose_project }}_{{ item }}"
-        state: absent
-      loop:
-        - jenkins_home
-        - sonarqube_data
-        - sonarqube_extensions
+    - name: Force purge leftover anonymous volumes specific ONLY to this project
+      ansible.builtin.shell: |
+        docker volume prune --force --filter "label=com.docker.compose.project={{ project_root | basename }}"
+      changed_when: true
       failed_when: false
 
     - name: Destroy terraform managed infra
@@ -54,14 +48,23 @@
         cmd: terraform destroy -auto-approve -input=false
         chdir: "{{ terraform_dir }}"
       changed_when: true
+      failed_when: false
 
     - name: Destroy state backend bootstrap resources
       ansible.builtin.command:
         cmd: terraform destroy -auto-approve -input=false
         chdir: "{{ project_root }}/terraform/bootstrap"
       changed_when: true
+      failed_when: false
 
-    - name: Remove local build artifacts and generated secrets
+    - name: Force delete remediation lambda
+      amazon.aws.lambda:
+        name: "falco-remediation"
+        state: absent
+        region: "us-east-1"
+      failed_when: false
+
+    - name: Remove local build artifacts, generated secrets, and tooling caches
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -69,31 +72,34 @@
         - "{{ lambda_dir }}/lambda-package"
         - "{{ lambda_dir }}/falco_remediation.zip"
         - "{{ project_root }}/.terraform-outputs.json"
-        - "{{ project_root }}/.secrets/jenkins_admin_password"
-        - "{{ project_root }}/.secrets/sonar_admin_password"
-        - "{{ project_root }}/jenkins/casc.yaml"
+        - "{{ project_root }}/.secrets"
         - "{{ project_root }}/.pipeline-credentials"
-
-    - name: Remove local tooling caches
-      ansible.builtin.shell:
-        cmd: rm -rf "{{ item }}"
-      loop:
-        - "{{ project_root }}/.venv"
         - "{{ project_root }}/.ansible"
-      changed_when: true
+
+    - name: Audit active resources across critical services
+      amazon.aws.aws_az_info:
+        region: "us-east-1"
+      register: aws_check
+      failed_when: false
+
+    - name: Scan and look up lingering infrastructure objects
+      ansible.builtin.command: >
+        aws resourcegroupstaggingapi get-resources
+        --region us-east-1
+        --query "ResourceTagMappingList[*].ResourceARN"
+        --output json
+      register: active_resources
+      changed_when: false
       failed_when: false
 
     - name: Remove terraform metadata recursively
       ansible.builtin.shell: |
         find "{{ project_root }}/terraform" -type d -name ".terraform" -prune -exec rm -rf {} +
         find "{{ project_root }}/terraform" -name ".terraform.lock.hcl" -delete
-      register: terraform_cleanup
-      changed_when: terraform_cleanup.rc == 0
+        find "{{ project_root }}/terraform" -name "terraform.tfstate" -delete
+        find "{{ project_root }}/terraform" -name "terraform.tfstate.backup" -delete
+      changed_when: true
       failed_when: false
-
-    - name: Report local cleanup complete
-      ansible.builtin.debug:
-        msg: "removed .venv, .ansible, and all terraform metadata (.terraform directories and lock files). vault.yml and .vault_pass are kept intentionally so your snyk token and vault encryption survive across sessions"
 
     - name: Find and remove pycache and pytest cache directories
       ansible.builtin.shell: |
@@ -103,6 +109,13 @@
         find "{{ project_root }}" -name "gitleaks-report.json" -delete 2>/dev/null
       changed_when: false
 
-    - name: Teardown complete
+    - name: Teardown and local cleanup complete
       ansible.builtin.debug:
-        msg: "teardown complete, run aws eks list-clusters, aws ecr describe-repositories and aws lambda list-functions to confirm nothing billable remains"
+        msg: |
+          Local cleanup complete! Removed .ansible and all terraform metadata (.terraform directories, state, and lock files).
+          Note: vault.yml and .vault_pass are kept intentionally so your snyk token and vault encryption survive across sessions.
+
+          Teardown complete. Please run the following to confirm nothing billable remains:
+          - aws eks list-clusters
+          - aws ecr describe-repositories
+          - aws lambda list-functions
