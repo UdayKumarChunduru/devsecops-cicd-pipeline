@@ -76,21 +76,30 @@
         - "{{ project_root }}/.pipeline-credentials"
         - "{{ project_root }}/.ansible"
 
-    - name: Audit active resources across critical services
-      amazon.aws.aws_az_info:
-        region: "us-east-1"
-      register: aws_check
-      failed_when: false
-
-    - name: Scan and look up lingering infrastructure objects
+    - name: Scan for any lingering resources tagged for this project
       ansible.builtin.command: >
         aws resourcegroupstaggingapi get-resources
         --region us-east-1
+        --tag-filters Key=project,Values=devsecops-pipeline
         --query "ResourceTagMappingList[*].ResourceARN"
         --output json
       register: active_resources
       changed_when: false
       failed_when: false
+
+    - name: Report any lingering project resources
+      ansible.builtin.debug:
+        msg: "{{ active_resources.stdout | from_json }}"
+      when:
+        - active_resources.stdout is defined
+        - (active_resources.stdout | from_json | length) > 0
+
+    - name: Confirm clean teardown when nothing lingers
+      ansible.builtin.debug:
+        msg: "no project tagged resources remain in us-east-1"
+      when:
+        - active_resources.stdout is defined
+        - (active_resources.stdout | from_json | length) == 0
 
     - name: Remove terraform metadata recursively
       ansible.builtin.shell: |
