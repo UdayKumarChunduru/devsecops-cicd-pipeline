@@ -11,6 +11,18 @@
       ansible.builtin.set_fact:
         tf_outputs: "{{ lookup('file', project_root + '/.terraform-outputs.json') | from_json }}"
 
+    - name: Verify vault variables are actually loaded
+      ansible.builtin.assert:
+        that:
+          - vault_jenkins_admin_user is defined
+          - vault_snyk_token is defined
+          - vault_snyk_token != "paste-snyk-api-token-here"
+        fail_msg: >
+          ansible/group_vars/all/vault.yml is missing, empty, or still has
+          placeholder values. run make vault-setup, edit the file with your
+          real snyk token, then rerun make up.
+        success_msg: "vault variables loaded correctly"
+
     - name: Ensure secrets directory exists
       ansible.builtin.file:
         path: "{{ project_root }}/.secrets"
