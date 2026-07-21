@@ -44,10 +44,16 @@ vault-init: galaxy-install $(VAULT_PASS_FILE)
 	fi
 
 vault-encrypt: $(VAULT_PASS_FILE)
+	@if [ ! -f ansible/group_vars/all/vault.yml ]; then \
+		echo "[VAULT] ansible/group_vars/all/vault.yml does not exist"; \
+		echo "[VAULT] run: make vault-setup"; \
+		exit 1; \
+	fi
 	@if grep -q '^\$$ANSIBLE_VAULT' ansible/group_vars/all/vault.yml 2>/dev/null; then \
 		echo "[VAULT] vault.yml is already encrypted, nothing to do"; \
 	else \
-		$(VENV_BIN)/ansible-vault encrypt ansible/group_vars/all/vault.yml --vault-password-file $(VAULT_PASS_FILE); \
+		$(VENV_BIN)/ansible-vault encrypt ansible/group_vars/all/vault.yml --vault-password-file $(VAULT_PASS_FILE) || \
+			(echo "[VAULT] encryption failed, see error above" && exit 1); \
 		echo "[VAULT] vault.yml encrypted successfully with $(VAULT_PASS_FILE)"; \
 	fi
 
