@@ -34,16 +34,25 @@ preflight: galaxy-install
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/preflight.yml
 	@echo "[PREFLIGHT] all required tools present, aws identity confirmed"
 
-vault-init: galaxy-install $(VAULT_PASS_FILE)
+vault-init: $(STAMP) $(VAULT_PASS_FILE)
 	@if [ -f ansible/group_vars/all/vault.yml ]; then \
 		echo "[VAULT] ansible/group_vars/all/vault.yml already exists, leaving it untouched"; \
 	else \
 		cp ansible/group_vars/all/vault.yml.example ansible/group_vars/all/vault.yml; \
 		echo "[VAULT] created ansible/group_vars/all/vault.yml from the example template"; \
-		echo "[VAULT] edit it now with your real snyk token, then run: make vault-encrypt"; \
+		if [ -n "$$SNYK_TOKEN" ]; then \
+			sed -i "s#paste-snyk-api-token-here#$$SNYK_TOKEN#" ansible/group_vars/all/vault.yml; \
+			echo "[VAULT] snyk token populated from the SNYK_TOKEN environment variable"; \
+		elif [ -t 0 ]; then \
+			echo "[VAULT] edit it now with your real snyk token, then run: make vault-encrypt"; \
+		else \
+			echo "[VAULT] no SNYK_TOKEN environment variable set and no terminal attached to prompt for one"; \
+			echo "[VAULT] set it before running this target: export SNYK_TOKEN=your-token-here"; \
+			exit 1; \
+		fi; \
 	fi
 
-vault-encrypt: $(VAULT_PASS_FILE)
+vault-encrypt: $(STAMP) $(VAULT_PASS_FILE)
 	@if [ ! -f ansible/group_vars/all/vault.yml ]; then \
 		echo "[VAULT] ansible/group_vars/all/vault.yml does not exist"; \
 		echo "[VAULT] run: make vault-setup"; \
@@ -63,12 +72,10 @@ vault-reset:
 	@cp ansible/group_vars/all/vault.yml.example ansible/group_vars/all/vault.yml
 	@echo "[VAULT] vault.yml reset, edit it and run make vault-encrypt again"
 
-vault-setup: preflight vault-init
+vault-setup: vault-init vault-encrypt
 	@echo "------------------------------------------------------------------------"
-	@echo "[VAULT] Initialization complete."
-	@echo "[STEP 1] Open 'ansible/group_vars/all/vault.yml' and paste your Snyk Token."
-	@echo "[STEP 2] Save the file, then run this command to deploy your stack:"
-	@echo "         make up"
+	@echo "[VAULT] vault.yml created, populated, and encrypted"
+	@echo "[NEXT] run: make up"
 	@echo "------------------------------------------------------------------------"
 
 up: preflight $(VAULT_PASS_FILE) vault-encrypt
