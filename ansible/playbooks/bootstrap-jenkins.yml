@@ -247,9 +247,15 @@
         status_code: [200, 404]
       register: job_exists_check
 
-    - name: Build the crumb header as a real dict, not a templated yaml key
+    - name: Build headers for Jenkins API call
       ansible.builtin.set_fact:
-        crumb_header: "{{ {crumb_response.json.crumbRequestField: crumb_response.json.crumb} }}"
+        jenkins_headers: >-
+          {{
+            {
+              crumb_response.json.crumbRequestField: crumb_response.json.crumb,
+              'Cookie': crumb_response.cookies_string | default('')
+            }
+          }}
       no_log: true
 
     - name: Trigger the devsecops-pipeline build
@@ -261,8 +267,9 @@
         url_username: "{{ vault_jenkins_admin_user }}"
         url_password: "{{ jenkins_admin_password }}"
         force_basic_auth: true
-        headers: "{{ crumb_header }}"
-        headers_cookie: "{{ crumb_response.cookies_string | default('') }}"
+        headers: "{{ jenkins_headers }}"
+        body_format: form-urlencoded
+        body: {}
         status_code: [200, 201, 302]
       register: build_trigger_result
       ignore_errors: true
