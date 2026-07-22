@@ -162,6 +162,7 @@
       register: sonar_token_response
 
     - name: Save sonar token as a fact
+      no_log: true
       ansible.builtin.set_fact:
         sonar_token: "{{ sonar_token_response.json.token }}"
 
