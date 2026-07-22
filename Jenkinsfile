@@ -2,15 +2,14 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME        = 'demo-service'
-        AWS_REGION      = 'us-east-1'
-        AWS_ACCOUNT_ID  = credentials('aws-account-id')
-        ECR_REGISTRY    = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        SONAR_HOST_URL  = 'http://sonarqube:9000'
-        IMAGE_TAG       = "${env.BUILD_NUMBER}"
-        IMAGE           = "${ECR_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
-        MAVEN_OPTS      = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
+        APP_NAME         = 'demo-service'
+        AWS_REGION       = 'us-east-1'
+        AWS_ACCOUNT_ID   = credentials('aws-account-id')
+        SONAR_HOST_URL   = 'http://sonarqube:9000'
+        IMAGE_TAG        = "${env.BUILD_NUMBER}"
+        MAVEN_OPTS       = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
         EKS_CLUSTER_NAME = 'devsecops-real'
+        K8S_NAMESPACE    = 'devsecops-pipeline'
     }
 
     options {
@@ -28,10 +27,10 @@ pipeline {
             steps {
                 sh '''
                   gitleaks detect \
-                    --no-git \
-                    --source . \
-                    --report-format json \
-                    --report-path gitleaks-report.json
+                  --no-git \
+                  --source . \
+                  --report-format json \
+                  --report-path gitleaks-report.json
                 '''
             }
             post {
@@ -87,6 +86,15 @@ pipeline {
             }
         }
 
+        stage('Setup ECR Env') {
+            steps {
+                script {
+                    env.ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                    env.IMAGE        = "${env.ECR_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
+                }
+            }
+        }
+
         stage('Build image') {
             steps {
                 dir('app') {
@@ -118,7 +126,7 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
                       aws ecr get-login-password --region $AWS_REGION | \
-                        docker login --username AWS --password-stdin $ECR_REGISTRY
+                      docker login --username AWS --password-stdin $ECR_REGISTRY
                       docker push $IMAGE
                     '''
                 }
@@ -130,9 +138,9 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
                       aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
-                      sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment-eks.yaml | kubectl apply -f -
-                      kubectl apply -f k8s/service.yaml
-                      kubectl rollout status deployment/demo-service --timeout=180s
+                      sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment-eks.yaml | kubectl apply -n $K8S_NAMESPACE -f -
+                      kubectl apply -n $K8S_NAMESPACE -f k8s/service.yaml
+                      kubectl rollout status deployment/demo-service -n $K8S_NAMESPACE --timeout=180s
                     '''
                 }
             }
