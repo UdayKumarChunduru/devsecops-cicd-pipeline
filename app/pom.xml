@@ -21,6 +21,7 @@
     <mockito.version>5.17.0</mockito.version>
     <logback.version>1.5.37</logback.version>
     <tomcat.version>11.0.24</tomcat.version>
+    <jackson-bom.version>2.22.1</jackson-bom.version>
   </properties>
 
   <dependencies>
