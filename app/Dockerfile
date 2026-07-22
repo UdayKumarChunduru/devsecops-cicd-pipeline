@@ -6,6 +6,7 @@ COPY src ./src
 RUN mvn -B package -DskipTests
 
 FROM eclipse-temurin:17-jre-alpine
+RUN apk update && apk upgrade --no-cache
 RUN addgroup -S app && adduser -S -G app -u 10001 app
 WORKDIR /opt/app
 COPY --chown=10001:10001 --from=build /build/target/demo-service-0.1.0.jar app.jar
