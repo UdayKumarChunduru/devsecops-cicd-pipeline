@@ -96,19 +96,19 @@ infra: preflight
 	@echo "[INFRA] applying terraform state backend then the real environment"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/provision-infra.yml
 
-jenkins: preflight $(VAULT_PASS_FILE)
+jenkins: $(VAULT_PASS_FILE)
 	@echo "[JENKINS] bootstrapping sonarqube and jenkins with configuration as code"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/bootstrap-jenkins.yml --vault-password-file ../$(VAULT_PASS_FILE)
 
-k8s: preflight
+k8s:
 	@echo "[K8S] applying rbac, kyverno policies and falco"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/deploy-k8s-security.yml
 
-lambda: preflight
+lambda:
 	@echo "[LAMBDA] packaging and deploying the remediation function"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/deploy-lambda.yml
 
-test: preflight
+test:
 	@echo "[TEST] running the falco quarantine end to end test"
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/test-quarantine.yml
 
@@ -117,7 +117,7 @@ down:
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/teardown.yml
 	@echo "[VENV] Teardown successful! Safely removing local python virtual environment..."
 	rm -rf $(VENV_DIR)
-	@echo "[TEARDOWN] complete, verify with aws eks list-clusters, aws ecr describe-repositories, aws lambda list-functions"
+	@echo "[TEARDOWN] complete"
 
 lint: galaxy-install
 	terraform fmt -check -recursive terraform/
