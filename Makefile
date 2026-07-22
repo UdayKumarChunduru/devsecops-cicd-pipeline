@@ -78,7 +78,16 @@ vault-setup: vault-init vault-encrypt
 	@echo "[NEXT] run: make up"
 	@echo "------------------------------------------------------------------------"
 
-up: preflight $(VAULT_PASS_FILE) vault-encrypt
+up: $(STAMP) $(VAULT_PASS_FILE)
+	@if [ ! -f ansible/group_vars/all/vault.yml ]; then \
+		if [ -z "$$SNYK_TOKEN" ]; then \
+			echo "[VAULT] vault.yml not found and SNYK_TOKEN environment variable is not set"; \
+			echo "[VAULT] export SNYK_TOKEN=your-real-token and rerun make up"; \
+			exit 1; \
+		fi; \
+		$(MAKE) --no-print-directory vault-init; \
+	fi
+	@$(MAKE) --no-print-directory vault-encrypt
 	@echo "[PROVISION] Vault secured. Provisioning full stack (Infra, K8s, Lambda, Jenkins)..."
 	cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS) playbooks/site.yml --vault-password-file ../$(VAULT_PASS_FILE)
 	@echo "[PROVISION] Complete! Run 'cat .pipeline-credentials' for access logins."
