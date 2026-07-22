@@ -34,10 +34,28 @@
         state: directory
         mode: "0755"
 
-    - name: Install kubernetes client into package directory
+    - name: Check for a pre-built lambda dependency wheelhouse
+      ansible.builtin.stat:
+        path: "{{ project_root }}/.venv/wheelhouse/.populated"
+      register: wheelhouse_marker
+
+    - name: Build the lambda dependency wheelhouse once
+      ansible.builtin.command:
+        cmd: "{{ project_root }}/.venv/bin/pip3 download kubernetes==36.0.3 -d {{ project_root }}/.venv/wheelhouse"
+      when: not wheelhouse_marker.stat.exists
+      changed_when: true
+
+    - name: Mark the wheelhouse as populated
+      ansible.builtin.file:
+        path: "{{ project_root }}/.venv/wheelhouse/.populated"
+        state: touch
+        mode: "0644"
+      when: not wheelhouse_marker.stat.exists
+
+    - name: Install kubernetes client into package directory from the local wheelhouse only
       ansible.builtin.pip:
-        name: kubernetes
-        extra_args: "--target {{ lambda_dir }}/lambda-package"
+        name: kubernetes==36.0.3
+        extra_args: "--target {{ lambda_dir }}/lambda-package --no-index --find-links {{ project_root }}/.venv/wheelhouse"
         executable: "{{ project_root }}/.venv/bin/pip3"
 
     - name: Copy handler code into package directory
