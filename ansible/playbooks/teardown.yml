@@ -47,6 +47,7 @@
       ansible.builtin.command:
         cmd: terraform destroy -auto-approve -input=false
         chdir: "{{ terraform_dir }}"
+      register: infra_destroy
       changed_when: true
       failed_when: false
 
@@ -54,6 +55,7 @@
       ansible.builtin.command:
         cmd: terraform destroy -auto-approve -input=false
         chdir: "{{ project_root }}/terraform/bootstrap"
+      register: bootstrap_destroy
       changed_when: true
       failed_when: false
 
@@ -63,19 +65,6 @@
         state: absent
         region: "us-east-1"
       failed_when: false
-
-    - name: Remove local build artifacts, generated secrets, and tooling caches
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - "{{ lambda_dir }}/lambda-package"
-        - "{{ lambda_dir }}/falco_remediation.zip"
-        - "{{ project_root }}/.terraform-outputs.json"
-        - "{{ project_root }}/.secrets"
-        - "{{ project_root }}/jenkins/casc.yaml"
-        - "{{ project_root }}/.pipeline-credentials"
-        - "{{ project_root }}/.ansible"
 
     - name: Scan for any lingering resources tagged for this project
       ansible.builtin.command: >
@@ -108,8 +97,24 @@
         find "{{ project_root }}/terraform" -name ".terraform.lock.hcl" -delete
         find "{{ project_root }}/terraform" -name "terraform.tfstate" -delete
         find "{{ project_root }}/terraform" -name "terraform.tfstate.backup" -delete
+        rm -f "{{ project_root }}/.terraform-outputs.json"
+      when:
+        - infra_destroy.rc == 0
+        - bootstrap_destroy.rc == 0
       changed_when: true
       failed_when: false
+
+    - name: Remove local build artifacts, generated secrets, and tooling caches
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ lambda_dir }}/lambda-package"
+        - "{{ lambda_dir }}/falco_remediation.zip"
+        - "{{ project_root }}/.secrets"
+        - "{{ project_root }}/jenkins/casc.yaml"
+        - "{{ project_root }}/.pipeline-credentials"
+        - "{{ project_root }}/.ansible"
 
     - name: Find and remove pycache and pytest cache directories
       ansible.builtin.shell: |
