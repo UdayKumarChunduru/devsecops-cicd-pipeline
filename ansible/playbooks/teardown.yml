@@ -63,7 +63,7 @@
       amazon.aws.lambda:
         name: "falco-remediation"
         state: absent
-        region: "us-east-1"
+        region: "{{ aws_region }}"
       failed_when: false
 
     - name: Scan for any lingering resources tagged for this project
