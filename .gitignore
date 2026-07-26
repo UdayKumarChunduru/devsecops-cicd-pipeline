@@ -25,15 +25,9 @@ sbom-*.json
 terraform/bootstrap/terraform.tfstate*
 .terraform-outputs.json
 
-.vault_pass
-ansible/group_vars/all/vault.yml
-.secrets/
-jenkins/casc.yaml
-docker-compose.yml
 
 infracost-report.txt
 .ansible/
 .terraform.lock.hcl
 __pycache__/
-.pipeline-credentials
-.venv/
+.terraform-outputs.json
