@@ -12,3 +12,4 @@ credentials
 timestamper
 ws-cleanup
 job-dsl
+github

@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME         = 'demo-service'
-        AWS_REGION       = 'us-east-1'
-        AWS_ACCOUNT_ID   = credentials('aws-account-id')
-        SONAR_HOST_URL   = 'http://sonarqube:9000'
-        IMAGE_TAG        = "${env.BUILD_NUMBER}"
-        MAVEN_OPTS       = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
-        EKS_CLUSTER_NAME = 'devsecops-real'
-        K8S_NAMESPACE    = 'devsecops-pipeline'
+        APP_NAME          = 'demo-service'
+        AWS_REGION        = 'us-east-1'
+        AWS_ACCOUNT_ID    = credentials('aws-account-id')
+        SONAR_HOST_URL    = 'http://sonarqube:9000/sonarqube'
+        MAVEN_OPTS        = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
+        EKS_CLUSTER_NAME  = 'devsecops-real'
+        K8S_NAMESPACE     = 'devsecops-pipeline'
+        CODEBUILD_PROJECT = 'devsecops-image-build'
     }
 
     options {
@@ -19,7 +19,7 @@ pipeline {
     }
 
     triggers {
-        pollSCM('H/2 * * * *')
+        githubPush()
     }
 
     stages {
@@ -86,49 +86,41 @@ pipeline {
             }
         }
 
-        stage('Setup ECR Env') {
-            steps {
-                script {
-                    env.ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                    env.IMAGE        = "${env.ECR_REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
-                }
-            }
-        }
-
-        stage('Build image') {
-            steps {
-                dir('app') {
-                    sh 'docker build -t $IMAGE .'
-                }
-            }
-        }
-
-        stage('Image scan - Trivy') {
-            steps {
-                sh '''
-                  trivy image --timeout 15m --exit-code 1 --severity CRITICAL --ignorefile .trivyignore --no-progress $IMAGE
-                  trivy image --timeout 15m --severity HIGH,MEDIUM --ignorefile .trivyignore --no-progress $IMAGE || true
-                '''
-            }
-        }
-
-        stage('Generate SBOM - Trivy') {
-            steps {
-                sh 'trivy image --format cyclonedx --output sbom-$IMAGE_TAG.json $IMAGE'
-            }
-            post {
-                always { archiveArtifacts artifacts: 'sbom-*.json', allowEmptyArchive: true }
-            }
-        }
-
-        stage('Push to ECR') {
+        stage('Build, scan and push image via CodeBuild') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
-                      aws ecr get-login-password --region $AWS_REGION | \
-                      docker login --username AWS --password-stdin $ECR_REGISTRY
-                      docker push $IMAGE
+                      BUILD_ID=$(aws codebuild start-build \
+                        --project-name $CODEBUILD_PROJECT \
+                        --region $AWS_REGION \
+                        --source-version $GIT_COMMIT \
+                        --query 'build.id' --output text)
+
+                      echo "codebuild build id: $BUILD_ID"
+
+                      while true; do
+                        STATUS=$(aws codebuild batch-get-builds --ids "$BUILD_ID" --region $AWS_REGION --query 'builds[0].buildStatus' --output text)
+                        echo "codebuild status: $STATUS"
+                        if [ "$STATUS" = "SUCCEEDED" ]; then
+                          break
+                        elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "FAULT" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "TIMED_OUT" ]; then
+                          echo "codebuild did not succeed, status was $STATUS"
+                          exit 1
+                        fi
+                        sleep 15
+                      done
                     '''
+                }
+            }
+            post {
+                aborted {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+                        sh '''
+                          if [ -n "${BUILD_ID:-}" ]; then
+                            aws codebuild stop-build --id "$BUILD_ID" --region $AWS_REGION || true
+                          fi
+                        '''
+                    }
                 }
             }
         }
@@ -137,6 +129,8 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
                     sh '''
+                      IMAGE_TAG=$(echo $GIT_COMMIT | cut -c1-8)
+                      IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:${IMAGE_TAG}"
                       aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
                       sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment-eks.yaml | kubectl apply -n $K8S_NAMESPACE -f -
                       kubectl apply -n $K8S_NAMESPACE -f k8s/service.yaml
