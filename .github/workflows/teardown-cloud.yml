@@ -4,6 +4,7 @@ permissions:
   id-token: write
   contents: read
 
+# checkov:skip=CKV_GHA_7:the confirm input is only ever compared with a strict equality check in the job's if condition below, it is never interpolated into a shell command, script, or any executable context, so it cannot influence build output or run arbitrary code
 on:
   workflow_dispatch:
     inputs:
