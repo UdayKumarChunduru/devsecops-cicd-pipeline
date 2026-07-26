@@ -1,5 +1,5 @@
 ---
-- name: Tear down the terraform-aws branch stack
+- name: Tear down the terraform-aws-cloud branch stack
   hosts: local
   gather_facts: false
   vars_files:
@@ -29,42 +29,24 @@
       when: cluster_check.rc == 0
       failed_when: false
 
-    - name: Stop local docker containers, networks, and named volumes
-      community.docker.docker_compose_v2:
-        project_src: "{{ project_root }}"
-        state: absent
-        remove_volumes: true
-        remove_orphans: true
-      failed_when: false
-
-    - name: Force purge leftover anonymous volumes specific ONLY to this project
-      ansible.builtin.shell: |
-        docker volume prune --force --filter "label=com.docker.compose.project={{ project_root | basename }}"
-      changed_when: true
-      failed_when: false
-
-    - name: Destroy terraform managed infra
-      ansible.builtin.command:
-        cmd: terraform destroy -auto-approve -input=false
-        chdir: "{{ terraform_dir }}"
-      register: infra_destroy
-      changed_when: true
-      failed_when: false
-
-    - name: Destroy state backend bootstrap resources
-      ansible.builtin.command:
-        cmd: terraform destroy -auto-approve -input=false
-        chdir: "{{ project_root }}/terraform/bootstrap"
-      register: bootstrap_destroy
-      changed_when: true
-      failed_when: false
-
     - name: Force delete remediation lambda
       amazon.aws.lambda:
         name: "falco-remediation"
         state: absent
         region: "{{ aws_region }}"
       failed_when: false
+
+    - name: Destroy terraform managed infra
+      ansible.builtin.command:
+        cmd: terraform destroy -auto-approve -input=false
+        chdir: "{{ terraform_dir }}"
+      environment:
+        TF_VAR_snyk_token: "{{ lookup('ansible.builtin.env', 'SNYK_TOKEN') | default('unused-during-destroy') }}"
+        TF_VAR_budget_alert_email: "{{ lookup('ansible.builtin.env', 'BUDGET_ALERT_EMAIL') | default('unused-during-destroy') }}"
+      register: infra_destroy
+      changed_when: true
+      failed_when: false
+      no_log: true
 
     - name: Scan for any lingering resources tagged for this project
       ansible.builtin.command: >
@@ -93,44 +75,20 @@
 
     - name: Remove terraform metadata recursively
       ansible.builtin.shell: |
-        find "{{ project_root }}/terraform" -type d -name ".terraform" -prune -exec rm -rf {} +
-        find "{{ project_root }}/terraform" -name ".terraform.lock.hcl" -delete
-        find "{{ project_root }}/terraform" -name "terraform.tfstate" -delete
-        find "{{ project_root }}/terraform" -name "terraform.tfstate.backup" -delete
+        find "{{ project_root }}/terraform/environments/aws-cloud" -type d -name ".terraform" -prune -exec rm -rf {} +
+        find "{{ project_root }}/terraform/environments/aws-cloud" -name ".terraform.lock.hcl" -delete
         rm -f "{{ project_root }}/.terraform-outputs.json"
-      when:
-        - infra_destroy.rc == 0
-        - bootstrap_destroy.rc == 0
+      when: infra_destroy.rc == 0
       changed_when: true
       failed_when: false
 
-    - name: Remove local build artifacts, generated secrets, and tooling caches
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - "{{ lambda_dir }}/lambda-package"
-        - "{{ lambda_dir }}/falco_remediation.zip"
-        - "{{ project_root }}/.secrets"
-        - "{{ project_root }}/jenkins/casc.yaml"
-        - "{{ project_root }}/.pipeline-credentials"
-        - "{{ project_root }}/.ansible"
-
-    - name: Find and remove pycache and pytest cache directories
-      ansible.builtin.shell: |
-        find "{{ project_root }}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
-        find "{{ project_root }}" -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null
-        find "{{ project_root }}" -name "sbom-*.json" -delete 2>/dev/null
-        find "{{ project_root }}" -name "gitleaks-report.json" -delete 2>/dev/null
-      changed_when: false
-
-    - name: Teardown and local cleanup complete
+    - name: Teardown complete
       ansible.builtin.debug:
         msg: |
-          Local cleanup complete! Removed .ansible and all terraform metadata (.terraform directories, state, and lock files).
-          Note: vault.yml and .vault_pass are kept intentionally so your snyk token and vault encryption survive across sessions.
-
-          Teardown complete. Please run the following to confirm nothing billable remains:
+          Teardown complete. Confirm nothing billable remains:
           - aws eks list-clusters
           - aws ecr describe-repositories
           - aws lambda list-functions
+          - aws ec2 describe-instances --filters "Name=tag:project,Values=devsecops-pipeline"
+          - aws efs describe-file-systems
+          note: terraform/bootstrap (state bucket, lock table, oidc role) is intentionally not destroyed here, it is meant to persist across every apply/destroy cycle of the real infrastructure

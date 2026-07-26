@@ -11,8 +11,5 @@
 - name: Package and deploy lambda, subscribe to sns
   import_playbook: deploy-lambda.yml
 
-- name: Bootstrap jenkins and sonarqube
-  import_playbook: bootstrap-jenkins.yml
-
 - name: Run end to end quarantine test
   import_playbook: test-quarantine.yml

@@ -3,7 +3,7 @@ cluster_name: devsecops-real
 sns_topic_name: devsecops-pipeline-alerts
 ecr_repository_name: demo-service
 project_root: "{{ (playbook_dir ~ '/../..') | realpath }}"
-terraform_dir: "{{ project_root }}/terraform/environments/aws"
+terraform_dir: "{{ project_root }}/terraform/environments/aws-cloud"
 lambda_dir: "{{ project_root }}/aws/lambda"
 k8s_dir: "{{ project_root }}/k8s"
 kyverno_dir: "{{ project_root }}/kyverno"

@@ -14,10 +14,7 @@
         - terraform
         - aws
         - kubectl
-        - helm
-        - zip
-        - python3
-        - docker
+        - ansible-playbook
 
     - name: Check aws credentials are configured
       ansible.builtin.command:
