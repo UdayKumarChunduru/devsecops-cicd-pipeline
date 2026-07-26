@@ -8,10 +8,41 @@ terraform {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "efs" {
   description             = "kms key for jenkins, sonarqube and maven efs volumes"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountFullAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowEfsUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticfilesystem.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_kms_alias" "efs" {
@@ -22,13 +53,7 @@ resource "aws_kms_alias" "efs" {
 resource "aws_security_group" "efs" {
   name_prefix = "devsecops-efs-sg-"
   vpc_id      = var.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  description = "efs mount targets, ingress only, never initiates outbound connections"
 
   tags = {
     project = "devsecops-pipeline"
