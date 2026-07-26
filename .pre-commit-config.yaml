@@ -25,9 +25,8 @@ repos:
         additional_dependencies:
           - boto3
           - botocore
-          - docker
           - kubernetes
-        entry: bash -c 'ansible-galaxy collection install -r ansible/requirements.yml && ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass ansible-lint "$@"' --
+        entry: bash -c 'ansible-galaxy collection install -r ansible/requirements.yml && ansible-lint "$@"' --
         files: ^ansible/.*\.(yml|yaml)$
 
   - repo: https://github.com/adrienverge/yamllint
