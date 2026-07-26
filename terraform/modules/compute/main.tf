@@ -142,10 +142,16 @@ resource "aws_iam_role_policy" "jenkins_host" {
         Resource = var.secrets_kms_key_arn
       },
       {
+        # checkov:skip=CKV_AWS_355:ecr:GetAuthorizationToken is account level, aws does not support a resource arn constraint for this specific action
+        Sid      = "EcrAuthToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
         Sid    = "EcrPushPull"
         Effect = "Allow"
         Action = [
-          "ecr:GetAuthorizationToken",
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
@@ -154,7 +160,7 @@ resource "aws_iam_role_policy" "jenkins_host" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload"
         ]
-        Resource = "*"
+        Resource = "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/*"
       },
       {
         Sid      = "EksDescribe"
@@ -165,8 +171,8 @@ resource "aws_iam_role_policy" "jenkins_host" {
       {
         Sid      = "CodeBuildTrigger"
         Effect   = "Allow"
-        Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds"]
-        Resource = "*"
+        Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds", "codebuild:StopBuild"]
+        Resource = "arn:aws:codebuild:${var.aws_region}:${data.aws_caller_identity.current.account_id}:project/devsecops-image-build"
       }
     ]
   })
