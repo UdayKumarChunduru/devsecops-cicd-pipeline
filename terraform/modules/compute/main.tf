@@ -13,6 +13,7 @@ data "aws_caller_identity" "current" {}
 resource "aws_security_group" "alb" {
   name_prefix = "jenkins-alb-sg-"
   vpc_id      = var.vpc_id
+  description = "alb accepting only github webhook traffic"
 
   ingress {
     description = "http from github webhook ip ranges only, no other inbound path exists to this alb"
@@ -23,10 +24,11 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description = "forward to jenkins target group inside the vpc only"
+    from_port   = 8080
+    to_port     = 9000
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
   }
 
   tags = {
@@ -34,9 +36,14 @@ resource "aws_security_group" "alb" {
   }
 }
 
+data "aws_vpc" "selected" {
+  id = var.vpc_id
+}
+
 resource "aws_security_group" "jenkins" {
   name_prefix = "jenkins-sg-"
   vpc_id      = var.vpc_id
+  description = "jenkins and sonarqube host, alb ingress only, https egress only"
 
   ingress {
     description     = "jenkins ui from alb only"
@@ -55,9 +62,18 @@ resource "aws_security_group" "jenkins" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "https to aws apis, ecr, s3, github and codebuild, all reachable only over 443"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "dns resolution"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -67,6 +83,7 @@ resource "aws_security_group" "jenkins" {
 }
 
 resource "aws_security_group_rule" "efs_from_jenkins" {
+  description              = "nfs from the jenkins host to the shared efs volumes"
   type                     = "ingress"
   from_port                = 2049
   to_port                  = 2049
@@ -176,6 +193,8 @@ resource "aws_instance" "jenkins_host" {
   subnet_id              = var.private_subnet_ids[0]
   vpc_security_group_ids = [aws_security_group.jenkins.id]
   iam_instance_profile   = aws_iam_instance_profile.jenkins_host.name
+  monitoring             = true
+  ebs_optimized          = true
 
   metadata_options {
     http_tokens = "required"
@@ -200,18 +219,78 @@ resource "aws_instance" "jenkins_host" {
   }
 }
 
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "devsecops-pipeline-alb-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket                  = aws_s3_bucket.alb_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    id     = "expire-old-alb-logs"
+    status = "Enabled"
+    expiration {
+      days = 90
+    }
+  }
+}
+
+data "aws_elb_service_account" "main" {}
+
+data "aws_iam_policy_document" "alb_logs" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.alb_logs.arn}/*"]
+    principals {
+      type        = "AWS"
+      identifiers = [data.aws_elb_service_account.main.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  policy = data.aws_iam_policy_document.alb_logs.json
+}
+
+# checkov:skip=CKV_AWS_150:deletion protection would block terraform destroy during teardown, this environment is torn down and recreated regularly by design
 resource "aws_lb" "jenkins" {
-  name               = "jenkins-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = var.public_subnet_ids
+  name                       = "jenkins-alb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb.id]
+  subnets                    = var.public_subnet_ids
+  drop_invalid_header_fields = true
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.id
+    enabled = true
+  }
 
   tags = {
     project = "devsecops-pipeline"
   }
 }
 
+# checkov:skip=CKV_AWS_378:traffic between the alb and this target stays inside the vpc private subnet, jenkins itself does not terminate tls, adding tls here would require a self managed cert on the instance for no real security gain within a private network path
 resource "aws_lb_target_group" "jenkins" {
   name        = "jenkins-tg"
   port        = 8080
@@ -226,6 +305,7 @@ resource "aws_lb_target_group" "jenkins" {
   }
 }
 
+# checkov:skip=CKV_AWS_378:same reasoning as the jenkins target group, internal vpc path only
 resource "aws_lb_target_group" "sonarqube" {
   name        = "sonarqube-tg"
   port        = 9000
