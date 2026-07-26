@@ -1,0 +1,46 @@
+name: teardown terraform-aws-cloud
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'type destroy to confirm you want to tear down every resource'
+        required: true
+
+jobs:
+  teardown:
+    if: github.event.inputs.confirm == 'destroy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+
+      - name: install kubectl and helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: install ansible and collections
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ansible boto3 botocore
+          ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: run teardown playbook
+        run: |
+          cd ansible
+          ansible-playbook playbooks/teardown.yml

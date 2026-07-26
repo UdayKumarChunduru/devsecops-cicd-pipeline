@@ -1,0 +1,67 @@
+name: deploy terraform-aws-cloud
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches: [terraform-aws-cloud]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+  workflow_dispatch:
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+
+      - name: terraform apply aws-cloud
+        env:
+          TF_VAR_snyk_token: ${{ secrets.SNYK_TOKEN }}
+          TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }}
+        run: |
+          cd terraform/environments/aws-cloud
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+
+  ansible-configure:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: install kubectl and helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: install ansible and collections
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ansible boto3 botocore
+          ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: run k8s security and lambda playbooks
+        run: |
+          cd ansible
+          ansible-playbook playbooks/deploy-k8s-security.yml
+          ansible-playbook playbooks/deploy-lambda.yml
