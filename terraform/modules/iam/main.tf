@@ -45,55 +45,6 @@ resource "aws_iam_role_policy" "lambda_eks_describe" {
   policy = data.aws_iam_policy_document.lambda_eks_describe.json
 }
 
-data "aws_iam_policy_document" "jenkins_ecr_eks" {
-  statement {
-    sid       = "EcrAuth"
-    effect    = "Allow"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "EcrPushPull"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:GetDownloadUrlForLayer",
-      "ecr:BatchGetImage",
-      "ecr:PutImage",
-      "ecr:InitiateLayerUpload",
-      "ecr:UploadLayerPart",
-      "ecr:CompleteLayerUpload",
-    ]
-    resources = [var.ecr_repository_arn]
-  }
-
-  statement {
-    sid       = "EksDescribeForKubeconfig"
-    effect    = "Allow"
-    actions   = ["eks:DescribeCluster"]
-    resources = [var.eks_cluster_arn]
-  }
-}
-
-resource "aws_iam_user" "jenkins" {
-  name = "jenkins-devsecops-pipeline"
-}
-
-resource "aws_iam_policy" "jenkins_ecr_eks" {
-  name   = "jenkins-ecr-eks-scoped"
-  policy = data.aws_iam_policy_document.jenkins_ecr_eks.json
-}
-
-resource "aws_iam_user_policy_attachment" "jenkins" {
-  user       = aws_iam_user.jenkins.name
-  policy_arn = aws_iam_policy.jenkins_ecr_eks.arn
-}
-
-resource "aws_iam_access_key" "jenkins" {
-  user = aws_iam_user.jenkins.name
-}
-
 module "falcosidekick_irsa" {
   source = "git::https://github.com/terraform-aws-modules/terraform-aws-iam.git//modules/iam-role-for-service-accounts?ref=5b962b1163790398605f2b17447cf5b6cc512237"
 

@@ -2,10 +2,6 @@ variable "eks_cluster_arn" {
   type = string
 }
 
-variable "ecr_repository_arn" {
-  type = string
-}
-
 variable "oidc_provider_arn" {
   type = string
 }

@@ -88,55 +88,49 @@ pipeline {
 
         stage('Build, scan and push image via CodeBuild') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
-                    sh '''
-                      BUILD_ID=$(aws codebuild start-build \
-                        --project-name $CODEBUILD_PROJECT \
-                        --region $AWS_REGION \
-                        --source-version $GIT_COMMIT \
-                        --query 'build.id' --output text)
+                sh '''
+                  BUILD_ID=$(aws codebuild start-build \
+                    --project-name $CODEBUILD_PROJECT \
+                    --region $AWS_REGION \
+                    --source-version $GIT_COMMIT \
+                    --query 'build.id' --output text)
 
-                      echo "codebuild build id: $BUILD_ID"
+                  echo "codebuild build id: $BUILD_ID"
 
-                      while true; do
-                        STATUS=$(aws codebuild batch-get-builds --ids "$BUILD_ID" --region $AWS_REGION --query 'builds[0].buildStatus' --output text)
-                        echo "codebuild status: $STATUS"
-                        if [ "$STATUS" = "SUCCEEDED" ]; then
-                          break
-                        elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "FAULT" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "TIMED_OUT" ]; then
-                          echo "codebuild did not succeed, status was $STATUS"
-                          exit 1
-                        fi
-                        sleep 15
-                      done
-                    '''
-                }
+                  while true; do
+                    STATUS=$(aws codebuild batch-get-builds --ids "$BUILD_ID" --region $AWS_REGION --query 'builds[0].buildStatus' --output text)
+                    echo "codebuild status: $STATUS"
+                    if [ "$STATUS" = "SUCCEEDED" ]; then
+                      break
+                    elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "FAULT" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "TIMED_OUT" ]; then
+                      echo "codebuild did not succeed, status was $STATUS"
+                      exit 1
+                    fi
+                    sleep 15
+                  done
+                '''
             }
             post {
                 aborted {
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
-                        sh '''
-                          if [ -n "${BUILD_ID:-}" ]; then
-                            aws codebuild stop-build --id "$BUILD_ID" --region $AWS_REGION || true
-                          fi
-                        '''
-                    }
+                    sh '''
+                      if [ -n "${BUILD_ID:-}" ]; then
+                        aws codebuild stop-build --id "$BUILD_ID" --region $AWS_REGION || true
+                      fi
+                    '''
                 }
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
-                    sh '''
-                      IMAGE_TAG=$(echo $GIT_COMMIT | cut -c1-8)
-                      IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:${IMAGE_TAG}"
-                      aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
-                      sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment-eks.yaml | kubectl apply -n $K8S_NAMESPACE -f -
-                      kubectl apply -n $K8S_NAMESPACE -f k8s/service.yaml
-                      kubectl rollout status deployment/demo-service -n $K8S_NAMESPACE --timeout=180s
-                    '''
-                }
+                sh '''
+                  IMAGE_TAG=$(echo $GIT_COMMIT | cut -c1-8)
+                  IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}:${IMAGE_TAG}"
+                  aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+                  sed "s|IMAGE_PLACEHOLDER|$IMAGE|" k8s/deployment-eks.yaml | kubectl apply -n $K8S_NAMESPACE -f -
+                  kubectl apply -n $K8S_NAMESPACE -f k8s/service.yaml
+                  kubectl rollout status deployment/demo-service -n $K8S_NAMESPACE --timeout=180s
+                '''
             }
         }
     }

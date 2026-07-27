@@ -25,12 +25,11 @@ module "sns" {
 }
 
 module "iam" {
-  source             = "../../modules/iam"
-  eks_cluster_arn    = "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${module.eks.cluster_name}"
-  ecr_repository_arn = module.ecr.repository_arn
-  oidc_provider_arn  = module.eks.oidc_provider_arn
-  sns_topic_arn      = module.sns.topic_arn
-  sns_kms_key_arn    = module.sns.kms_key_arn
+  source            = "../../modules/iam"
+  eks_cluster_arn   = "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${module.eks.cluster_name}"
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  sns_topic_arn     = module.sns.topic_arn
+  sns_kms_key_arn   = module.sns.kms_key_arn
 }
 
 module "efs" {
