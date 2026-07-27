@@ -14,7 +14,7 @@ repos:
     rev: 3.3.8
     hooks:
       - id: checkov
-        args: [--quiet, --skip-check, "CKV_AWS_273,CKV_AWS_40"]
+        args: [--quiet, --config-file, .checkov.yaml]
         exclude: ^(jenkins/casc\.yaml|docker-compose\.yml)$
 
   - repo: https://github.com/ansible/ansible-lint
