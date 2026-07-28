@@ -40,9 +40,6 @@
       ansible.builtin.command:
         cmd: terraform destroy -auto-approve -input=false
         chdir: "{{ terraform_dir }}"
-      environment:
-        TF_VAR_snyk_token: "{{ lookup('ansible.builtin.env', 'SNYK_TOKEN') | default('unused-during-destroy') }}"
-        TF_VAR_budget_alert_email: "{{ lookup('ansible.builtin.env', 'BUDGET_ALERT_EMAIL') | default('unused-during-destroy') }}"
       register: infra_destroy
       changed_when: true
       failed_when: false

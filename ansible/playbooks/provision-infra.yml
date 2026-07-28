@@ -16,9 +16,6 @@
       ansible.builtin.command:
         cmd: terraform apply -auto-approve -input=false
         chdir: "{{ terraform_dir }}"
-      environment:
-        TF_VAR_snyk_token: "{{ lookup('ansible.builtin.env', 'SNYK_TOKEN') }}"
-        TF_VAR_budget_alert_email: "{{ lookup('ansible.builtin.env', 'BUDGET_ALERT_EMAIL') }}"
       register: tf_apply
       changed_when: "'Apply complete' in tf_apply.stdout"
       no_log: true

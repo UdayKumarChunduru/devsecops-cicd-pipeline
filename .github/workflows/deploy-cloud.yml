@@ -29,8 +29,8 @@ jobs:
 
       - name: terraform apply aws-cloud
         env:
-          TF_VAR_snyk_token: ${{ secrets.SNYK_TOKEN }}
-          TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }}
+          TF_VAR_snyk_token: ${{ secrets.TF_VAR_SNYK_TOKEN }}
+          TF_VAR_budget_alert_email: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAIL }}
         run: |
           cd terraform/environments/aws-cloud
           terraform init -input=false
