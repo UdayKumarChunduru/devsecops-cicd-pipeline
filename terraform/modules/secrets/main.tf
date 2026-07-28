@@ -76,8 +76,9 @@ resource "random_password" "sonar_admin" {
 
 # checkov:skip=CKV2_AWS_57:automatic rotation would need a custom lambda rotation function per secret type, jenkins/sonarqube admin passwords and tokens here are rotated by re-running terraform apply or the ec2 user data script, not on an aws managed rotation schedule, this is a demo pipeline credential not a long lived production database credential
 resource "aws_secretsmanager_secret" "jenkins_admin_user" {
-  name       = "devsecops-pipeline/jenkins-admin-user"
-  kms_key_id = aws_kms_key.secrets.arn
+  name                    = "devsecops-pipeline/jenkins-admin-user"
+  kms_key_id              = aws_kms_key.secrets.arn
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "jenkins_admin_user" {
@@ -87,8 +88,9 @@ resource "aws_secretsmanager_secret_version" "jenkins_admin_user" {
 
 # checkov:skip=CKV2_AWS_57:automatic rotation would need a custom lambda rotation function per secret type, jenkins/sonarqube admin passwords and tokens here are rotated by re-running terraform apply or the ec2 user data script, not on an aws managed rotation schedule, this is a demo pipeline credential not a long lived production database credential
 resource "aws_secretsmanager_secret" "jenkins_admin_password" {
-  name       = "devsecops-pipeline/jenkins-admin-password"
-  kms_key_id = aws_kms_key.secrets.arn
+  name                    = "devsecops-pipeline/jenkins-admin-password"
+  kms_key_id              = aws_kms_key.secrets.arn
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "jenkins_admin_password" {
@@ -98,8 +100,9 @@ resource "aws_secretsmanager_secret_version" "jenkins_admin_password" {
 
 # checkov:skip=CKV2_AWS_57:automatic rotation would need a custom lambda rotation function per secret type, jenkins/sonarqube admin passwords and tokens here are rotated by re-running terraform apply or the ec2 user data script, not on an aws managed rotation schedule, this is a demo pipeline credential not a long lived production database credential
 resource "aws_secretsmanager_secret" "sonar_admin_password" {
-  name       = "devsecops-pipeline/sonar-admin-password"
-  kms_key_id = aws_kms_key.secrets.arn
+  name                    = "devsecops-pipeline/sonar-admin-password"
+  kms_key_id              = aws_kms_key.secrets.arn
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "sonar_admin_password" {
@@ -109,8 +112,9 @@ resource "aws_secretsmanager_secret_version" "sonar_admin_password" {
 
 # checkov:skip=CKV2_AWS_57:automatic rotation would need a custom lambda rotation function per secret type, jenkins/sonarqube admin passwords and tokens here are rotated by re-running terraform apply or the ec2 user data script, not on an aws managed rotation schedule, this is a demo pipeline credential not a long lived production database credential
 resource "aws_secretsmanager_secret" "snyk_token" {
-  name       = "devsecops-pipeline/snyk-token"
-  kms_key_id = aws_kms_key.secrets.arn
+  name                    = "devsecops-pipeline/snyk-token"
+  kms_key_id              = aws_kms_key.secrets.arn
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "snyk_token" {
@@ -120,8 +124,9 @@ resource "aws_secretsmanager_secret_version" "snyk_token" {
 
 # checkov:skip=CKV2_AWS_57:automatic rotation would need a custom lambda rotation function per secret type, jenkins/sonarqube admin passwords and tokens here are rotated by re-running terraform apply or the ec2 user data script, not on an aws managed rotation schedule, this is a demo pipeline credential not a long lived production database credential
 resource "aws_secretsmanager_secret" "sonar_token" {
-  name       = "devsecops-pipeline/sonar-token"
-  kms_key_id = aws_kms_key.secrets.arn
+  name                    = "devsecops-pipeline/sonar-token"
+  kms_key_id              = aws_kms_key.secrets.arn
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "sonar_token" {
