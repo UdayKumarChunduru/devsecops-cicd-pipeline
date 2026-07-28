@@ -225,44 +225,6 @@ resource "aws_instance" "jenkins_host" {
   }
 }
 
-resource "aws_kms_key" "alb_logs" {
-  description             = "kms key for the alb access log bucket"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "EnableRootAccountFullAccess"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "AllowElbLogDelivery"
-        Effect = "Allow"
-        Principal = {
-          AWS = data.aws_elb_service_account.main.arn
-        }
-        Action = [
-          "kms:GenerateDataKey",
-          "kms:Decrypt"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_kms_alias" "alb_logs" {
-  name          = "alias/devsecops-pipeline-alb-logs-key"
-  target_key_id = aws_kms_key.alb_logs.key_id
-}
-
 # checkov:skip=CKV_AWS_18: this is the alb access log bucket itself, enabling s3 access logging on it would mean it logs access to its own logs, a self referential loop with no security value for a bucket that already only receives writes from the elb service account
 # checkov:skip=CKV_AWS_144: cross region replication is unnecessary overhead for ephemeral alb access logs on an environment torn down and recreated regularly, this is not a compliance record with a retention requirement
 resource "aws_s3_bucket" "alb_logs" {
@@ -285,12 +247,12 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
   restrict_public_buckets = true
 }
 
+# checkov:skip=CKV_AWS_145: aws elastic load balancing access log delivery does not support customer managed kms keys, only sse-s3 (aes256) is supported by aws for this specific feature, this is a documented aws service limitation not a configuration choice
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.alb_logs.arn
+      sse_algorithm = "AES256"
     }
     bucket_key_enabled = true
   }
