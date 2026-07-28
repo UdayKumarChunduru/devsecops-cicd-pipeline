@@ -1,5 +1,5 @@
 ---
-- name: Tear down the terraform-aws-cloud branch stack
+- name: Tear down the terraform-aws-cloud branch stack completely
   hosts: local
   gather_facts: false
   vars_files:
@@ -36,14 +36,21 @@
         region: "{{ aws_region }}"
       failed_when: false
 
-    - name: Destroy terraform managed infra
+    - name: Destroy the real environment
       ansible.builtin.command:
         cmd: terraform destroy -auto-approve -input=false
         chdir: "{{ terraform_dir }}"
       register: infra_destroy
       changed_when: true
       failed_when: false
-      no_log: true
+
+    - name: Destroy the state backend bootstrap
+      ansible.builtin.command:
+        cmd: terraform destroy -auto-approve -input=false
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      register: bootstrap_destroy
+      changed_when: true
+      failed_when: false
 
     - name: Scan for any lingering resources tagged for this project
       ansible.builtin.command: >
@@ -72,20 +79,43 @@
 
     - name: Remove terraform metadata recursively
       ansible.builtin.shell: |
-        find "{{ project_root }}/terraform/environments/aws-cloud" -type d -name ".terraform" -prune -exec rm -rf {} +
-        find "{{ project_root }}/terraform/environments/aws-cloud" -name ".terraform.lock.hcl" -delete
+        find "{{ project_root }}/terraform" -type d -name ".terraform" -prune -exec rm -rf {} +
+        find "{{ project_root }}/terraform" -name ".terraform.lock.hcl" -delete
+        find "{{ project_root }}/terraform" -name "terraform.tfstate" -delete
+        find "{{ project_root }}/terraform" -name "terraform.tfstate.backup" -delete
         rm -f "{{ project_root }}/.terraform-outputs.json"
-      when: infra_destroy.rc == 0
+      when:
+        - infra_destroy.rc == 0
+        - bootstrap_destroy.rc == 0
       changed_when: true
       failed_when: false
+
+    - name: Remove local build artifacts and tooling caches
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ lambda_dir }}/lambda-package"
+        - "{{ lambda_dir }}/falco_remediation.zip"
+
+    - name: Find and remove pycache and pytest cache directories
+      ansible.builtin.shell: |
+        find "{{ project_root }}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+        find "{{ project_root }}" -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null
+        find "{{ project_root }}" -name "sbom-*.json" -delete 2>/dev/null
+        find "{{ project_root }}" -name "gitleaks-report.json" -delete 2>/dev/null
+      changed_when: false
 
     - name: Teardown complete
       ansible.builtin.debug:
         msg: |
-          Teardown complete. Confirm nothing billable remains:
+          Teardown complete, both the real environment and the state backend bootstrap were destroyed.
+          Confirm nothing billable remains:
           - aws eks list-clusters
           - aws ecr describe-repositories
           - aws lambda list-functions
           - aws ec2 describe-instances --filters "Name=tag:project,Values=devsecops-pipeline"
           - aws efs describe-file-systems
-          note: terraform/bootstrap (state bucket, lock table, oidc role) is intentionally not destroyed here, it is meant to persist across every apply/destroy cycle of the real infrastructure
+          - aws s3 ls | grep devsecops-pipeline
+          Note: the github secret AWS_GITHUB_ACTIONS_ROLE_ARN is now stale since bootstrap was destroyed,
+          the next make infra recreates the role with the same name but a new arn, update the secret before the next deploy.
