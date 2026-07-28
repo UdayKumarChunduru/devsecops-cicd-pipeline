@@ -25,3 +25,7 @@ output "lambda_role_arn" {
 output "sns_topic_arn" {
   value = module.sns.topic_arn
 }
+
+output "falcosidekick_irsa_role_arn" {
+  value = module.iam.falcosidekick_irsa_role_arn
+}
