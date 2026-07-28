@@ -8,51 +8,49 @@ keys anywhere. See SECURITY.md for the full security model.
 
 ## One time setup
 
-### 1. Bootstrap the OIDC trust relationship
+    export TF_VAR_snyk_token=your_snyk_token
+    export TF_VAR_budget_alert_email=your_email
+    make setup
 
-This is the one step that cannot be automated, a human with real AWS
-credentials has to create the initial trust between GitHub Actions and
-this AWS account, exactly once, ever, for the lifetime of this repo.
+Creates a local .venv, installs ansible and every collection this
+branch needs, checks for kubectl and helm. Nothing installs into
+system python.
 
-    cd terraform/bootstrap
-    terraform init
-    terraform apply
-    terraform output github_actions_role_arn
+## Deploy everything
 
-Copy that ARN. Because it now lives in terraform/bootstrap, not in the
-real infrastructure environment, this value never changes again, even
-across every future destroy and recreate of the actual EKS/EC2/EFS
-stack.
+    make infra
+    make k8s
+    make lambda
+    make test
 
-### 2. Add repository secrets
+Or all four in one shot:
 
-Repo Settings -> Secrets and variables -> Actions -> New repository
-secret, add:
+    make up
 
-    AWS_GITHUB_ACTIONS_ROLE_ARN   the arn from step 1
-    SNYK_TOKEN                    from app.snyk.io -> account settings -> auth token
-    BUDGET_ALERT_EMAIL            an email you actually check
+infra runs terraform init and apply against terraform/bootstrap first
+(state bucket, dynamodb lock, github actions oidc trust), then against
+terraform/environments/aws-cloud (vpc, eks, ecr, sns, iam, efs,
+secrets, codebuild, compute, budget). Jenkins and sonarqube boot
+themselves automatically on the ec2 instance as part of this step,
+there is no separate make jenkins target, that job moved entirely
+into the ec2 user-data script.
 
-No IP address secret exists. Jenkins and SonarQube are never reachable
-over the public internet at all.
+After infra finishes, note the github actions role arn printed in the
+output, add it to the repo as secret AWS_GITHUB_ACTIONS_ROLE_ARN if
+you want future pushes to trigger deploys through github actions
+instead of running make up locally every time. This is optional,
+make up works fully on its own without it.
 
-### 3. Push to trigger the first deploy
+## Teardown
 
-    git push origin terraform-aws-cloud
+    make down
 
-The deploy-cloud.yml workflow applies terraform, then runs the
-kubernetes security and lambda ansible playbooks. Takes 15-20 minutes,
-mostly EKS.
-
-### 4. Add the GitHub webhook
-
-    cd terraform/environments/aws-cloud
-    terraform output alb_dns_name
-
-Repo Settings -> Webhooks -> Add webhook, payload URL
-`http://<alb-dns-name>/github-webhook/`, content type
-`application/json`. One time manual step, the ALB's DNS name only
-exists after the first apply.
+Destroys every resource this branch created, including the state
+backend bootstrap, nothing survives in the aws account. If you had
+set the AWS_GITHUB_ACTIONS_ROLE_ARN github secret, it goes stale after
+this, the next make infra recreates the role with the same name but a
+new arn, update the secret before relying on github actions to deploy
+again.
 
 ## Accessing Jenkins and SonarQube
 
