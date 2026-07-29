@@ -10,6 +10,7 @@ systemctl restart amazon-ssm-agent
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
+usermod -aG docker ssm-user || true
 
 sysctl -w vm.max_map_count=524288
 echo "vm.max_map_count=524288" >> /etc/sysctl.conf

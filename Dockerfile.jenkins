@@ -2,7 +2,7 @@ FROM jenkins/jenkins:lts-jdk21
 
 USER root
 
-ARG RETRIES="${RETRIES}"
+ARG RETRIES="--retry 5 --retry-delay 3"
 
 RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries && \
     apt-get update && \

@@ -161,16 +161,29 @@
         dest: "{{ project_root }}/.pipeline-credentials"
         mode: "0600"
         content: |
-          JENKINS_URL=http://localhost:8080 (after starting the ssm tunnel, see README)
+          JENKINS_URL=http://localhost:8080 (SSM tunnel started automatically by make infra)
           JENKINS_ADMIN_USER={{ secret_values.results[0].stdout }}
           JENKINS_ADMIN_PASSWORD={{ secret_values.results[1].stdout }}
-          SONARQUBE_URL=http://localhost:9000/sonarqube (after starting the ssm tunnel, see README)
+          SONARQUBE_URL=http://localhost:9000/sonarqube (SSM tunnel started automatically by make infra)
           SONAR_ADMIN_USER=admin
           SONAR_ADMIN_PASSWORD={{ secret_values.results[2].stdout }}
           AWS_ACCOUNT_ID={{ tf_outputs.aws_account_id.value }}
           INSTANCE_ID={{ tf_outputs.instance_id.value }}
           ALB_DNS_NAME={{ tf_outputs.alb_dns_name.value }}
 
-    - name: Confirm credentials file was written
+    - name: Terminate any existing stale local SSM tunnels on ports 8080 or 9000
+      ansible.builtin.shell: |
+        pkill -f "AWS-StartPortForwardingSession.*8080" || true
+        pkill -f "AWS-StartPortForwardingSession.*9000" || true
+      changed_when: false
+      failed_when: false
+
+    - name: Automatically spawn background AWS SSM port-forwarding tunnels for Jenkins and SonarQube
+      ansible.builtin.shell: |
+        nohup aws ssm start-session --target {{ tf_outputs.instance_id.value }} --document-name AWS-StartPortForwardingSession --parameters '{"portNumber":["8080"],"localPortNumber":["8080"]}' --region {{ aws_region }} >/dev/null 2>&1 &
+        nohup aws ssm start-session --target {{ tf_outputs.instance_id.value }} --document-name AWS-StartPortForwardingSession --parameters '{"portNumber":["9000"],"localPortNumber":["9000"]}' --region {{ aws_region }} >/dev/null 2>&1 &
+      changed_when: true
+
+    - name: Confirm credentials file was written and tunnels started
       ansible.builtin.debug:
-        msg: "credentials written to .pipeline-credentials, run cat .pipeline-credentials to view"
+        msg: "Credentials written to .pipeline-credentials. Localhost SSM tunnels for ports 8080 and 9000 are running in the background!"
