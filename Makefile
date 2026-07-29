@@ -1,22 +1,34 @@
-.PHONY: setup preflight check-vars up down infra k8s lambda test lint docs
+.PHONY: setup preflight check-vars up down infra k8s lambda test lint docs galaxy-install
 
 VENV_DIR = .venv
 VENV_BIN = $(VENV_DIR)/bin
 ANSIBLE  = $(VENV_BIN)/ansible-playbook
 STAMP    = $(VENV_DIR)/.installed
+ANSIBLE_ARGS ?= -v
+
+ANSIBLE_RUN = cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS)
 
 $(STAMP):
-	bash ansible/control-node-setup.sh
+	@if [ -d "$(VENV_DIR)" ]; then \
+		echo "[VENV] existing virtualenv found at $(VENV_DIR), reusing it"; \
+	else \
+		echo "[VENV] no virtualenv found, creating one at $(VENV_DIR)"; \
+		python3 -m venv $(VENV_DIR); \
+		echo "[VENV] virtualenv created at $(VENV_DIR)"; \
+	fi
+	@$(VENV_BIN)/pip install --upgrade pip --quiet
+	@$(VENV_BIN)/pip install --quiet ansible boto3 botocore kubernetes flake8 pytest ansible-lint
+	@echo "[GALAXY] checking ansible collections against ansible/requirements.yml"
+	@$(VENV_BIN)/ansible-galaxy collection install -r ansible/requirements.yml
 	@touch $(STAMP)
+	@echo "[VENV] setup complete"
 
-setup: $(STAMP)
-	@echo "------------------------------------------------------------------------"
-	@echo "[SETUP] venv ready, collections installed, kubectl and helm present"
-	@echo "[NEXT] export TF_VAR_snyk_token and TF_VAR_budget_alert_email, then run: make infra"
-	@echo "------------------------------------------------------------------------"
+galaxy-install: $(STAMP)
 
-preflight: $(STAMP)
-	cd ansible && ../$(ANSIBLE) playbooks/preflight.yml
+preflight: galaxy-install
+	@echo "[PREFLIGHT] verifying terraform, ansible, aws, kubectl, eksctl, helm, python3, docker and aws credentials"
+	@$(ANSIBLE_RUN) playbooks/preflight.yml
+	@echo "[PREFLIGHT] all required tools present, aws identity confirmed"
 
 check-vars:
 	@if [ -z "$$TF_VAR_snyk_token" ]; then \
@@ -27,34 +39,39 @@ check-vars:
 	fi
 	@echo "[ENV] required variables present"
 
-up: preflight check-vars
-	@echo "[UP] provisioning bootstrap, real infra, k8s security, lambda. jenkins and sonarqube boot themselves on the ec2 instance during infra"
-	cd ansible && ../$(ANSIBLE) playbooks/site.yml
-	@echo "[UP] complete"
+setup: galaxy-install preflight check-vars
+	@echo "------------------------------------------------------------------------"
+	@echo "[SETUP] control node ready, tools verified, and variables checked"
+	@echo "[NEXT] run: make up"
+	@echo "------------------------------------------------------------------------"
 
-infra: preflight check-vars
-	@echo "[INFRA] terraform init and apply against terraform/bootstrap then terraform/environments/aws-cloud, ec2 boots jenkins and sonarqube itself as part of this step"
-	cd ansible && ../$(ANSIBLE) playbooks/provision-infra.yml
+up: galaxy-install preflight check-vars infra k8s lambda test
+	@echo "[UP] complete pipeline executed successfully"
 
-k8s: preflight
+infra: check-vars
+	@echo "[INFRA] applying terraform state backend then the real environment"
+	@$(ANSIBLE_RUN) playbooks/provision-infra.yml
+
+k8s:
 	@echo "[K8S] applying rbac, kyverno policies and falco"
-	cd ansible && ../$(ANSIBLE) playbooks/deploy-k8s-security.yml
+	@$(ANSIBLE_RUN) playbooks/deploy-k8s-security.yml
 
-lambda: preflight
+lambda:
 	@echo "[LAMBDA] packaging and deploying the remediation function"
-	cd ansible && ../$(ANSIBLE) playbooks/deploy-lambda.yml
+	@$(ANSIBLE_RUN) playbooks/deploy-lambda.yml
 
-test: preflight
+test:
 	@echo "[TEST] running the falco quarantine end to end test"
-	cd ansible && ../$(ANSIBLE) playbooks/test-quarantine.yml
+	@$(ANSIBLE_RUN) playbooks/test-quarantine.yml
 
-down: preflight
-	@echo "[TEARDOWN] destroying every cloud resource this branch created, including the state backend bootstrap, no trace left"
-	cd ansible && ../$(ANSIBLE) playbooks/teardown.yml
-	rm -rf $(VENV_DIR)
+down:
+	@echo "[TEARDOWN] destroying every cloud resource this branch created"
+	@$(ANSIBLE_RUN) playbooks/teardown.yml
+	@echo "[TEARDOWN] removing local python virtual environment"
+	@rm -rf $(VENV_DIR)
 	@echo "[TEARDOWN] complete"
 
-lint: $(STAMP)
+lint: galaxy-install
 	terraform fmt -check -recursive terraform/
 	cd terraform/environments/aws-cloud && terraform init -backend=false && terraform validate
 	tflint --chdir=terraform/environments/aws-cloud --init

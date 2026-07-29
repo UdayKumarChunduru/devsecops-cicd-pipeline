@@ -12,9 +12,13 @@
       changed_when: false
       loop:
         - terraform
+        - ansible
         - aws
         - kubectl
-        - ansible-playbook
+        - helm
+        - eksctl
+        - python3
+        - docker
 
     - name: Check aws credentials are configured
       ansible.builtin.command:
