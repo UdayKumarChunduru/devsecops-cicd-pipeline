@@ -77,40 +77,30 @@
       delay: 20
       changed_when: false
 
-    - name: Wait for the jenkins and sonarqube bootstrap script to finish on the instance
-      ansible.builtin.command:
-        cmd: >
-          aws ssm send-command
-          --instance-ids {{ tf_outputs.instance_id.value }}
-          --document-name "AWS-RunShellScript"
-          --parameters commands="test -f /opt/devsecops/bootstrap-complete"
-          --region {{ aws_region }}
-          --query "Command.CommandId"
-          --output text
-      register: bootstrap_check_cmd
-      changed_when: false
-
-    - name: Pause for the bootstrap check command to run
-      ansible.builtin.pause:
-        seconds: 5
-
-    - name: Poll bootstrap completion marker
-      ansible.builtin.command:
-        cmd: >
-          aws ssm get-command-invocation
-          --command-id {{ bootstrap_check_cmd.stdout }}
-          --instance-id {{ tf_outputs.instance_id.value }}
-          --region {{ aws_region }}
-          --query "Status"
+    - name: Poll EC2 instance until the bootstrap completion marker is present (takes ~4 minutes)
+      ansible.builtin.shell: |
+        CMD_ID=$(aws ssm send-command \
+          --instance-ids {{ tf_outputs.instance_id.value }} \
+          --document-name "AWS-RunShellScript" \
+          --parameters commands="test -f /opt/devsecops/bootstrap-complete" \
+          --region {{ aws_region }} \
+          --query "Command.CommandId" \
+          --output text)
+        sleep 3
+        aws ssm get-command-invocation \
+          --command-id "$CMD_ID" \
+          --instance-id {{ tf_outputs.instance_id.value }} \
+          --region {{ aws_region }} \
+          --query "Status" \
           --output text
       register: bootstrap_status
-      until: bootstrap_status.stdout in ["Success", "Failed"]
-      retries: 60
-      delay: 20
+      until: bootstrap_status.stdout == "Success"
+      retries: 30
+      delay: 15
       failed_when: false
       changed_when: false
 
-    - name: Fetch the full user-data bootstrap log from the instance
+    - name: Fetch the full user-data bootstrap log if the script failed or timed out
       ansible.builtin.command:
         cmd: >
           aws ssm send-command
@@ -121,13 +111,15 @@
           --query "Command.CommandId"
           --output text
       register: log_fetch_cmd
+      when: bootstrap_status.stdout != "Success"
       changed_when: false
 
-    - name: Pause for the log fetch command to run
+    - name: Pause for the log fetch command to complete
       ansible.builtin.pause:
-        seconds: 10
+        seconds: 5
+      when: bootstrap_status.stdout != "Success"
 
-    - name: Display the bootstrap log
+    - name: Retrieve the contents of the bootstrap log
       ansible.builtin.command:
         cmd: >
           aws ssm get-command-invocation
@@ -137,11 +129,13 @@
           --query "StandardOutputContent"
           --output text
       register: bootstrap_log
+      when: bootstrap_status.stdout != "Success"
       changed_when: false
 
     - name: Print the bootstrap log to this terminal
       ansible.builtin.debug:
         msg: "{{ bootstrap_log.stdout_lines }}"
+      when: bootstrap_status.stdout != "Success"
 
     - name: Fail loudly if bootstrap did not complete successfully
       ansible.builtin.fail:
