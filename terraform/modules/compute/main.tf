@@ -77,6 +77,14 @@ resource "aws_security_group" "jenkins" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  egress {
+    description = "nfs to the efs mount targets, required to mount jenkins_home, sonarqube_data and maven_repo"
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+  }
+
   tags = {
     project = "devsecops-pipeline"
   }
