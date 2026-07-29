@@ -147,3 +147,36 @@
       ansible.builtin.fail:
         msg: "jenkins and sonarqube bootstrap on the ec2 instance did not complete, see the log printed above for the exact failure"
       when: bootstrap_status.stdout != "Success"
+
+    - name: Read jenkins and sonarqube credentials from secrets manager
+      no_log: true
+      ansible.builtin.command:
+        cmd: >
+          aws secretsmanager get-secret-value --secret-id devsecops-pipeline/{{ item }}
+          --region {{ aws_region }} --query SecretString --output text
+      register: secret_values
+      changed_when: false
+      loop:
+        - jenkins-admin-user
+        - jenkins-admin-password
+        - sonar-admin-password
+
+    - name: Write local pipeline credentials summary file
+      no_log: true
+      ansible.builtin.copy:
+        dest: "{{ project_root }}/.pipeline-credentials"
+        mode: "0600"
+        content: |
+          JENKINS_URL=http://localhost:8080 (after starting the ssm tunnel, see README)
+          JENKINS_ADMIN_USER={{ secret_values.results[0].stdout }}
+          JENKINS_ADMIN_PASSWORD={{ secret_values.results[1].stdout }}
+          SONARQUBE_URL=http://localhost:9000/sonarqube (after starting the ssm tunnel, see README)
+          SONAR_ADMIN_USER=admin
+          SONAR_ADMIN_PASSWORD={{ secret_values.results[2].stdout }}
+          AWS_ACCOUNT_ID={{ tf_outputs.aws_account_id.value }}
+          INSTANCE_ID={{ tf_outputs.instance_id.value }}
+          ALB_DNS_NAME={{ tf_outputs.alb_dns_name.value }}
+
+    - name: Confirm credentials file was written
+      ansible.builtin.debug:
+        msg: "credentials written to .pipeline-credentials, run cat .pipeline-credentials to view"

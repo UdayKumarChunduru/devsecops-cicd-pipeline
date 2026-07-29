@@ -31,3 +31,4 @@ infracost-report.txt
 .terraform.lock.hcl
 __pycache__/
 .terraform-outputs.json
+.pipeline-credentials
