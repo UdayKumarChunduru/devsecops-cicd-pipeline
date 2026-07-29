@@ -193,12 +193,12 @@ fi
 curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
   -d "name=jenkins&url=http://jenkins:8080/sonarqube-webhook/" >/dev/null || true
 
-for i in $(seq 1 3); do
+for i in $(seq 1 5); do
   if docker compose up -d --build jenkins; then
     break
   fi
-  echo "Jenkins docker compose build failed, retrying in 15 seconds... (attempt $i/3)"
-  sleep 15
+  echo "Jenkins docker compose build failed, retrying in 30 seconds... (attempt $i/5)"
+  sleep 30
 done
 
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url} || true
