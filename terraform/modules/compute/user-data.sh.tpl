@@ -19,6 +19,9 @@ mkdir -p /usr/local/lib/docker/cli-plugins
 curl -SL https://github.com/docker/compose/releases/download/v5.3.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
+curl -SL https://github.com/docker/buildx/releases/download/v0.36.0/buildx-v0.36.0.linux-amd64 -o /usr/local/lib/docker/cli-plugins/docker-buildx
+chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+
 while [ ! -S /var/run/docker.sock ]; do
   sleep 2
 done
