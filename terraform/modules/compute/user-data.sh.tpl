@@ -174,3 +174,5 @@ curl -s -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqub
 /usr/bin/docker compose up -d --build jenkins
 
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url}
+
+touch /opt/devsecops/bootstrap-complete
