@@ -3,13 +3,17 @@ exec > >(tee -a /var/log/user-data.log | tee /dev/console) 2>&1
 set -euo pipefail
 set -x
 
-dnf install -y docker docker-compose-plugin amazon-efs-utils awscli git
+dnf install -y docker amazon-efs-utils awscli git
 systemctl enable amazon-ssm-agent
 systemctl restart amazon-ssm-agent
 
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL https://github.com/docker/compose/releases/download/v5.3.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 while [ ! -S /var/run/docker.sock ]; do
   sleep 2
