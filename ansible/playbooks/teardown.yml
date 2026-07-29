@@ -36,6 +36,13 @@
         region: "{{ aws_region }}"
       failed_when: false
 
+    - name: Pre-emptively purge secrets to bypass AWS retention windows
+      ansible.builtin.shell: |
+        for secret in jenkins-admin-user jenkins-admin-password sonar-admin-password snyk-token sonar-token; do
+          aws secretsmanager delete-secret --secret-id "devsecops-pipeline/$secret" --force-delete-without-recovery --region us-east-1 || true
+        done
+      changed_when: true
+
     - name: Destroy the real environment
       ansible.builtin.command:
         cmd: terraform destroy -auto-approve -input=false
