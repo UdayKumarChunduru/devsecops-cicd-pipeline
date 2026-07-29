@@ -77,7 +77,7 @@
       delay: 20
       changed_when: false
 
-    - name: Poll EC2 instance until the bootstrap completion marker is present (takes ~4 minutes)
+    - name: Poll EC2 instance until the bootstrap completion marker is present
       ansible.builtin.shell: |
         CMD_ID=$(aws ssm send-command \
           --instance-ids {{ tf_outputs.instance_id.value }} \
@@ -95,7 +95,7 @@
           --output text
       register: bootstrap_status
       until: bootstrap_status.stdout == "Success"
-      retries: 30
+      retries: 45
       delay: 15
       failed_when: false
       changed_when: false

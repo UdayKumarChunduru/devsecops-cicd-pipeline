@@ -11,8 +11,11 @@ systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
 
+sysctl -w vm.max_map_count=524288
+echo "vm.max_map_count=524288" >> /etc/sysctl.conf
+
 mkdir -p /usr/local/lib/docker/cli-plugins
-curl -SL https://github.com/docker/compose/releases/download/v5.3.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+curl -SL https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 while [ ! -S /var/run/docker.sock ]; do
@@ -28,6 +31,9 @@ mount -t efs -o tls ${efs_maven_id}:/ /mnt/maven_repo
 echo "${efs_jenkins_id}:/ /mnt/jenkins_home efs _netdev,tls 0 0" >> /etc/fstab
 echo "${efs_sonarqube_id}:/ /mnt/sonarqube_data efs _netdev,tls 0 0" >> /etc/fstab
 echo "${efs_maven_id}:/ /mnt/maven_repo efs _netdev,tls 0 0" >> /etc/fstab
+
+chown -R 1000:1000 /mnt/sonarqube_data
+chmod -R 777 /mnt/jenkins_home /mnt/sonarqube_data /mnt/maven_repo
 
 mkdir -p /opt/devsecops
 cd /opt/devsecops
@@ -155,31 +161,32 @@ sed -i "s#JENKINS_USER_PLACEHOLDER#$JENKINS_ADMIN_USER#g; s#JENKINS_PASSWORD_PLA
 cd /opt/devsecops
 docker compose up -d sonarqube
 
-for i in $(seq 1 30); do
-  STATUS=$(curl -s http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || echo "")
+for i in $(seq 1 60); do
+  STATUS=$(curl -s -L http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || echo "")
   if echo "$STATUS" | grep -q "UP"; then
     break
   fi
   sleep 10
 done
 
-DEFAULT_CHECK=$(curl -s -u admin:admin http://localhost:9000/sonarqube/api/authentication/validate)
+DEFAULT_CHECK=$(curl -s -L -u admin:admin http://localhost:9000/sonarqube/api/authentication/validate || echo "")
 if echo "$DEFAULT_CHECK" | grep -q '"valid":true'; then
-  curl -s -u admin:admin -X POST "http://localhost:9000/sonarqube/api/users/change_password" \
+  curl -s -L -u admin:admin -X POST "http://localhost:9000/sonarqube/api/users/change_password" \
     --data-urlencode "login=admin" \
     --data-urlencode "previousPassword=admin" \
     --data-urlencode "password=$SONAR_ADMIN_PASSWORD"
 fi
 
-curl -s -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/revoke" -d "name=jenkins" >/dev/null || true
-TOKEN_RESPONSE=$(curl -s -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/generate" -d "name=jenkins")
-SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/revoke" -d "name=jenkins" >/dev/null || true
+TOKEN_RESPONSE=$(curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/generate" -d "name=jenkins")
+SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])" || echo "TOKEN_GEN_FAILED")
 
-sed -i "s#SONAR_TOKEN_PLACEHOLDER#$SONAR_TOKEN#" /opt/devsecops/casc.yaml
+if [ "$SONAR_TOKEN" != "TOKEN_GEN_FAILED" ] && [ -n "$SONAR_TOKEN" ]; then
+  sed -i "s#SONAR_TOKEN_PLACEHOLDER#$SONAR_TOKEN#" /opt/devsecops/casc.yaml
+  aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token --region ${aws_region} --secret-string "$SONAR_TOKEN"
+fi
 
-aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token --region ${aws_region} --secret-string "$SONAR_TOKEN"
-
-curl -s -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
+curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
   -d "name=jenkins&url=http://jenkins:8080/sonarqube-webhook/" >/dev/null || true
 
 docker compose up -d --build jenkins
