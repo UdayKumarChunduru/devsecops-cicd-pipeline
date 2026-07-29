@@ -3,13 +3,17 @@ exec > >(tee -a /var/log/user-data.log | tee /dev/console) 2>&1
 set -euo pipefail
 set -x
 
-dnf install -y docker amazon-efs-utils awscli git
+dnf install -y docker docker-compose-plugin amazon-efs-utils awscli git
 systemctl enable amazon-ssm-agent
 systemctl restart amazon-ssm-agent
 
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
+
+while [ ! -S /var/run/docker.sock ]; do
+  sleep 2
+done
 
 mkdir -p /mnt/jenkins_home /mnt/sonarqube_data /mnt/maven_repo
 
@@ -31,7 +35,7 @@ SONAR_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id devsecops
 SNYK_TOKEN=$(aws secretsmanager get-secret-value --secret-id devsecops-pipeline/snyk-token --region ${aws_region} --query SecretString --output text)
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-cat > /opt/devsecops/docker-compose.yml << COMPOSEEOF
+cat > /opt/devsecops/docker-compose.yml << 'COMPOSEEOF'
 services:
   jenkins:
     build:
@@ -70,7 +74,7 @@ services:
     restart: unless-stopped
 COMPOSEEOF
 
-cat > /opt/devsecops/casc.yaml << CASCEOF
+cat > /opt/devsecops/casc.yaml << 'CASCEOF'
 jenkins:
   systemMessage: devsecops pipeline controller
   numExecutors: 2
@@ -145,7 +149,7 @@ CASCEOF
 sed -i "s#JENKINS_USER_PLACEHOLDER#$JENKINS_ADMIN_USER#g; s#JENKINS_PASSWORD_PLACEHOLDER#$JENKINS_ADMIN_PASSWORD#g; s#SNYK_TOKEN_PLACEHOLDER#$SNYK_TOKEN#g; s#AWS_ACCOUNT_ID_PLACEHOLDER#$AWS_ACCOUNT_ID#g" /opt/devsecops/casc.yaml
 
 cd /opt/devsecops
-/usr/bin/docker compose up -d sonarqube
+docker compose up -d sonarqube
 
 for i in $(seq 1 30); do
   STATUS=$(curl -s http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || echo "")
@@ -174,7 +178,7 @@ aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token -
 curl -s -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
   -d "name=jenkins&url=http://jenkins:8080/sonarqube-webhook/" >/dev/null || true
 
-/usr/bin/docker compose up -d --build jenkins
+docker compose up -d --build jenkins
 
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url}
 
