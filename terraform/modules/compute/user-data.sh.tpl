@@ -3,8 +3,9 @@ exec > >(tee -a /var/log/user-data.log | tee /dev/console) 2>&1
 set -euo pipefail
 set -x
 
-dnf update -y
 dnf install -y docker amazon-efs-utils awscli git
+systemctl enable amazon-ssm-agent
+systemctl restart amazon-ssm-agent
 
 systemctl enable docker
 systemctl start docker
