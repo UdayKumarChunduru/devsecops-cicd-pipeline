@@ -2,42 +2,40 @@ FROM jenkins/jenkins:lts-jdk21
 
 USER root
 
-RUN apt-get update && \
-apt-get install -y \
-curl \
-unzip \
-git \
-maven \
-docker.io \
-python3 \
-python3-pip \
-python3-venv && \
-rm -rf /var/lib/apt/lists/*
+ARG RETRIES="${RETRIES}"
 
-RUN curl -sLO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && \
-chmod +x kubectl && \
-mv kubectl /usr/local/bin/
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl unzip git maven docker.io python3 python3-pip python3-venv && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+RUN curl ${RETRIES} -sLO https://dl.k8s.io/release/$(curl ${RETRIES} -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/
+
+RUN curl ${RETRIES} -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 RUN git config --system --add safe.directory '*'
 
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-apt-get install -y nodejs
+RUN curl ${RETRIES} -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g snyk
 
-RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+RUN curl ${RETRIES} -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-RUN curl -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz && \
-tar -xzf gitleaks.tar.gz gitleaks && \
-mv gitleaks /usr/local/bin/ && \
-rm gitleaks.tar.gz
+RUN curl ${RETRIES} -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz && \
+    tar -xzf gitleaks.tar.gz gitleaks && \
+    mv gitleaks /usr/local/bin/ && \
+    rm gitleaks.tar.gz
 
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-unzip awscliv2.zip && \
-./aws/install && \
-rm -rf awscliv2.zip
+RUN curl ${RETRIES} "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip -q awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip
 
 RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version && python3 --version && pip3 --version && aws --version
 

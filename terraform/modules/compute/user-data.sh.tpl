@@ -15,7 +15,7 @@ sysctl -w vm.max_map_count=524288
 echo "vm.max_map_count=524288" >> /etc/sysctl.conf
 
 mkdir -p /usr/local/lib/docker/cli-plugins
-curl -SL https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+curl -SL https://github.com/docker/compose/releases/download/v5.3.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 while [ ! -S /var/run/docker.sock ]; do
@@ -162,35 +162,41 @@ cd /opt/devsecops
 docker compose up -d sonarqube
 
 for i in $(seq 1 60); do
-  STATUS=$(curl -s -L http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || echo "")
-  if echo "$STATUS" | grep -q "UP"; then
+  STATUS=$(curl -s -L http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || true)
+  if echo "$STATUS" | grep -q "UP" 2>/dev/null; then
     break
   fi
   sleep 10
 done
 
-DEFAULT_CHECK=$(curl -s -L -u admin:admin http://localhost:9000/sonarqube/api/authentication/validate || echo "")
-if echo "$DEFAULT_CHECK" | grep -q '"valid":true'; then
+DEFAULT_CHECK=$(curl -s -L -u admin:admin http://localhost:9000/sonarqube/api/authentication/validate || true)
+if echo "$DEFAULT_CHECK" | grep -q '"valid":true' 2>/dev/null; then
   curl -s -L -u admin:admin -X POST "http://localhost:9000/sonarqube/api/users/change_password" \
     --data-urlencode "login=admin" \
     --data-urlencode "previousPassword=admin" \
-    --data-urlencode "password=$SONAR_ADMIN_PASSWORD"
+    --data-urlencode "password=$SONAR_ADMIN_PASSWORD" || true
 fi
 
 curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/revoke" -d "name=jenkins" >/dev/null || true
-TOKEN_RESPONSE=$(curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/generate" -d "name=jenkins")
-SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])" || echo "TOKEN_GEN_FAILED")
+TOKEN_RESPONSE=$(curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/generate" -d "name=jenkins" || echo "")
+SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || echo "")
 
-if [ "$SONAR_TOKEN" != "TOKEN_GEN_FAILED" ] && [ -n "$SONAR_TOKEN" ]; then
+if [ -n "$SONAR_TOKEN" ]; then
   sed -i "s#SONAR_TOKEN_PLACEHOLDER#$SONAR_TOKEN#" /opt/devsecops/casc.yaml
-  aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token --region ${aws_region} --secret-string "$SONAR_TOKEN"
+  aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token --region ${aws_region} --secret-string "$SONAR_TOKEN" || true
 fi
 
 curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
   -d "name=jenkins&url=http://jenkins:8080/sonarqube-webhook/" >/dev/null || true
 
-docker compose up -d --build jenkins
+for i in $(seq 1 3); do
+  if docker compose up -d --build jenkins; then
+    break
+  fi
+  echo "Jenkins docker compose build failed, retrying in 15 seconds... (attempt $i/3)"
+  sleep 15
+done
 
-aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url}
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url} || true
 
 touch /opt/devsecops/bootstrap-complete
