@@ -1,0 +1,31 @@
+---
+- name: Provision AWS state backend bootstrap with Terraform
+  hosts: local
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all/vars.yml
+
+  tasks:
+    - name: Run terraform init for state backend bootstrap
+      ansible.builtin.command:
+        cmd: terraform init -input=false
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      changed_when: true
+
+    - name: Run terraform apply for state backend bootstrap
+      ansible.builtin.command:
+        cmd: terraform apply -auto-approve -input=false
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      register: tf_bootstrap_apply
+      changed_when: "'Apply complete' in tf_bootstrap_apply.stdout"
+
+    - name: Read bootstrap outputs as json
+      ansible.builtin.command:
+        cmd: terraform output -json
+        chdir: "{{ project_root }}/terraform/bootstrap"
+      register: tf_bootstrap_outputs_raw
+      changed_when: false
+
+    - name: Show the github actions role arn, set this once as the AWS_GITHUB_ACTIONS_ROLE_ARN github secret
+      ansible.builtin.debug:
+        msg: "{{ (tf_bootstrap_outputs_raw.stdout | from_json).github_actions_role_arn.value }}"

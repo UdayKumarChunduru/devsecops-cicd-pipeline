@@ -1,4 +1,4 @@
-.PHONY: setup preflight check-vars up down infra k8s lambda test lint docs galaxy-install
+.PHONY: setup preflight check-vars up down infra bootstrap aws-cloud k8s lambda test lint docs galaxy-install
 
 VENV_DIR = .venv
 VENV_BIN = $(VENV_DIR)/bin
@@ -48,9 +48,16 @@ setup: galaxy-install preflight check-vars
 up: galaxy-install preflight check-vars infra k8s lambda test
 	@echo "[UP] complete pipeline executed successfully"
 
-infra: check-vars
-	@echo "[INFRA] applying terraform state backend then the real environment"
-	@$(ANSIBLE_RUN) playbooks/provision-infra.yml
+bootstrap: check-vars
+	@echo "[BOOTSTRAP] applying terraform state backend bootstrap only"
+	@$(ANSIBLE_RUN) playbooks/provision-bootstrap.yml
+
+aws-cloud: check-vars
+	@echo "[AWS-CLOUD] applying terraform real environment and spawning SSM tunnels"
+	@$(ANSIBLE_RUN) playbooks/provision-cloud.yml
+
+infra: check-vars bootstrap aws-cloud
+	@echo "[INFRA] complete infrastructure provisioning finished successfully"
 
 k8s:
 	@echo "[K8S] applying rbac, kyverno policies and falco"
