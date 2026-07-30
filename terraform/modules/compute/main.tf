@@ -130,6 +130,7 @@ resource "aws_iam_role_policy" "jenkins_host" {
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
         Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:devsecops-pipeline/*",
           var.jenkins_admin_user_secret_arn,
           var.jenkins_admin_password_secret_arn,
           var.sonar_admin_password_secret_arn,
@@ -138,22 +139,30 @@ resource "aws_iam_role_policy" "jenkins_host" {
         ]
       },
       {
-        Sid      = "SonarTokenWriteOnly"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:PutSecretValue"]
-        Resource = [var.sonar_token_secret_arn]
+        Sid    = "SonarTokenWriteOnly"
+        Effect = "Allow"
+        Action = ["secretsmanager:PutSecretValue"]
+        Resource = [
+          var.sonar_token_secret_arn,
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:devsecops-pipeline/sonar-token*"
+        ]
       },
       {
-        Sid      = "SecretsKmsUse"
-        Effect   = "Allow"
-        Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey"]
-        Resource = var.secrets_kms_key_arn
+        Sid    = "SecretsKmsUse"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKey"
+        ]
+        Resource = [
+          var.secrets_kms_key_arn
+        ]
       },
       {
-        # checkov:skip=CKV_AWS_355:ecr:GetAuthorizationToken is account level, aws does not support a resource arn constraint for this specific action
-        Sid      = "EcrAuthToken"
-        Effect   = "Allow"
-        Action   = ["ecr:GetAuthorizationToken"]
+        Sid    = "EcrAuthToken"
+        Effect = "Allow"
+        Action = ["ecr:GetAuthorizationToken"]
         Resource = "*"
       },
       {
@@ -171,15 +180,15 @@ resource "aws_iam_role_policy" "jenkins_host" {
         Resource = "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/*"
       },
       {
-        Sid      = "EksDescribe"
-        Effect   = "Allow"
-        Action   = ["eks:DescribeCluster"]
+        Sid    = "EksDescribe"
+        Effect = "Allow"
+        Action = ["eks:DescribeCluster"]
         Resource = "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${var.cluster_name}"
       },
       {
-        Sid      = "CodeBuildTrigger"
-        Effect   = "Allow"
-        Action   = ["codebuild:StartBuild", "codebuild:BatchGetBuilds", "codebuild:StopBuild"]
+        Sid    = "CodeBuildTrigger"
+        Effect = "Allow"
+        Action = ["codebuild:StartBuild", "codebuild:BatchGetBuilds", "codebuild:StopBuild"]
         Resource = "arn:aws:codebuild:${var.aws_region}:${data.aws_caller_identity.current.account_id}:project/devsecops-image-build"
       }
     ]
@@ -233,8 +242,6 @@ resource "aws_instance" "jenkins_host" {
   }
 }
 
-# checkov:skip=CKV_AWS_18: this is the alb access log bucket itself, enabling s3 access logging on it would mean it logs access to its own logs, a self referential loop with no security value for a bucket that already only receives writes from the elb service account
-# checkov:skip=CKV_AWS_144: cross region replication is unnecessary overhead for ephemeral alb access logs on an environment torn down and recreated regularly, this is not a compliance record with a retention requirement
 resource "aws_s3_bucket" "alb_logs" {
   bucket        = "devsecops-pipeline-alb-logs-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
@@ -255,7 +262,6 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
   restrict_public_buckets = true
 }
 
-# checkov:skip=CKV_AWS_145: aws elastic load balancing access log delivery does not support customer managed kms keys, only sse-s3 (aes256) is supported by aws for this specific feature, this is a documented aws service limitation not a configuration choice
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
   rule {
@@ -299,7 +305,6 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   policy = data.aws_iam_policy_document.alb_logs.json
 }
 
-# checkov:skip=CKV_AWS_150:deletion protection would block terraform destroy during teardown, this environment is torn down and recreated regularly by design
 resource "aws_lb" "jenkins" {
   name                       = "jenkins-alb"
   internal                   = false
@@ -318,7 +323,6 @@ resource "aws_lb" "jenkins" {
   }
 }
 
-# checkov:skip=CKV_AWS_378:traffic between the alb and this target stays inside the vpc private subnet, jenkins itself does not terminate tls, adding tls here would require a self managed cert on the instance for no real security gain within a private network path
 resource "aws_lb_target_group" "jenkins" {
   name        = "jenkins-tg"
   port        = 8080
@@ -333,7 +337,6 @@ resource "aws_lb_target_group" "jenkins" {
   }
 }
 
-# checkov:skip=CKV_AWS_378:same reasoning as the jenkins target group, internal vpc path only
 resource "aws_lb_target_group" "sonarqube" {
   name        = "sonarqube-tg"
   port        = 9000
@@ -360,8 +363,6 @@ resource "aws_lb_target_group_attachment" "sonarqube" {
   port             = 9000
 }
 
-# checkov:skip=CKV_AWS_2: no owned domain, no acm cert possible without domain ownership validation, alb serves only the github webhook restricted to github's published cidr ranges via security group, not open to 0.0.0.0/0
-# checkov:skip=CKV_AWS_103: tls termination requires a validated domain, not available in this environment
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.jenkins.arn
   port              = 80
