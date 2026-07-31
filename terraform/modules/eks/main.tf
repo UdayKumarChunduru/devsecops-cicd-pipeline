@@ -55,3 +55,13 @@ module "eks" {
     project = "devsecops-pipeline"
   }
 }
+
+resource "aws_security_group_rule" "cluster_vpc_https" {
+  description       = "Allow VPC inbound HTTPS to EKS control plane API"
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["10.0.0.0/16"]
+  security_group_id = module.eks.cluster_security_group_id
+}
