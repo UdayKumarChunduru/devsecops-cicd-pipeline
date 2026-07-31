@@ -215,9 +215,9 @@ if [ -n "$SONAR_TOKEN" ]; then
   aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token --region ${aws_region} --secret-string "$SONAR_TOKEN" || true
 fi
 
-# Use EC2_PRIVATE_IP so SonarQube SSRF protection accepts the webhook URL
+# Use $EC2_PRIVATE_IP without curly braces so Terraform templatefile() does not interpolate it
 curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://127.0.0.1:9000/sonarqube/api/webhooks/create" \
-  -d "name=jenkins&url=http://${EC2_PRIVATE_IP}:8080/sonarqube-webhook/" >/dev/null || true
+  -d "name=jenkins&url=http://$EC2_PRIVATE_IP:8080/sonarqube-webhook/" >/dev/null || true
 
 JENKINS_BUILD_OK=false
 for i in $(seq 1 5); do
