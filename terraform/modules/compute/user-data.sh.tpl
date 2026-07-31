@@ -238,7 +238,7 @@ aws ecr get-login-password --region ${aws_region} | docker login --username AWS 
 
 # Wait until Jenkins finishes loading Configuration-as-Code and is accepting requests
 for i in $(seq 1 60); do
-  if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/login | grep -q "200"; then
+  if curl -s -o /dev/null -w "%%{http_code}" http://127.0.0.1:8080/login | grep -q "200"; then
     break
   fi
   sleep 5
