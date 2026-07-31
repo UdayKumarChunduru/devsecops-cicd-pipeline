@@ -236,4 +236,20 @@ fi
 
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url} || true
 
+# Wait until Jenkins finishes loading Configuration-as-Code and is accepting requests
+for i in $(seq 1 60); do
+  if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/login | grep -q "200"; then
+    break
+  fi
+  sleep 5
+done
+
+# Automatically trigger the first pipeline build so Jenkins primes the githubPush webhook
+CRUMB=$(curl -s -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_PASSWORD}" "http://127.0.0.1:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" || true)
+if [ -n "$CRUMB" ]; then
+  curl -s -X POST -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_PASSWORD}" -H "$CRUMB" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true
+else
+  curl -s -X POST -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_PASSWORD}" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true
+fi
+
 touch /opt/devsecops/bootstrap-complete
