@@ -57,7 +57,7 @@ jobs:
       - name: install ansible and collections
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install ansible boto3 botocore
+          python3 -m pip install ansible boto3 botocore kubernetes flake8 pytest ansible-lint
           ansible-galaxy collection install -r ansible/requirements.yml
 
       - name: run k8s security and lambda playbooks

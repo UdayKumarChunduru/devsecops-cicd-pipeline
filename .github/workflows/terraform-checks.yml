@@ -5,12 +5,12 @@ permissions:
 
 on:
   pull_request:
-    branches: [terraform-aws]
+    branches: [terraform-aws-cloud]
     paths:
       - 'terraform/**'
       - 'ansible/**'
   push:
-    branches: [terraform-aws]
+    branches: [terraform-aws-cloud]
     paths:
       - 'terraform/**'
       - 'ansible/**'
@@ -30,7 +30,7 @@ jobs:
 
       - name: terraform init and validate
         run: |
-          for dir in terraform/bootstrap terraform/environments/aws terraform/modules/*/; do
+          for dir in terraform/bootstrap terraform/environments/aws-cloud terraform/modules/*/; do
             terraform -chdir="$dir" init -backend=false
             terraform -chdir="$dir" validate
           done
@@ -39,7 +39,7 @@ jobs:
 
       - name: tflint
         run: |
-          for dir in terraform/bootstrap terraform/environments/aws terraform/modules/*/; do
+          for dir in terraform/bootstrap terraform/environments/aws-cloud terraform/modules/*/; do
             tflint --chdir="$dir" --init
             tflint --chdir="$dir"
           done
@@ -78,7 +78,7 @@ jobs:
 
       - name: infracost breakdown
         run: |
-          infracost breakdown --path terraform/environments/aws \
+          infracost breakdown --path terraform/environments/aws-cloud \
             --format table \
             --out-file infracost-report.txt
 

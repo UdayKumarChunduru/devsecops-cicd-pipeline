@@ -1,10 +1,9 @@
 terraform {
   required_version = ">= 1.15.0"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 6.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -40,4 +39,10 @@ resource "aws_kms_alias" "sns" {
 resource "aws_sns_topic" "alerts" {
   name              = var.topic_name
   kms_master_key_id = aws_kms_key.sns.arn
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
 }

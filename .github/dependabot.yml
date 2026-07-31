@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: terraform
-    directory: /terraform/environments/aws
+    directory: /terraform/environments/aws-cloud
     schedule:
       interval: weekly
   - package-ecosystem: terraform

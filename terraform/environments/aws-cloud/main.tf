@@ -20,8 +20,9 @@ module "ecr" {
 }
 
 module "sns" {
-  source     = "../../modules/sns"
-  topic_name = var.sns_topic_name
+  source      = "../../modules/sns"
+  topic_name  = var.sns_topic_name
+  alert_email = var.budget_alert_email
 }
 
 module "iam" {
