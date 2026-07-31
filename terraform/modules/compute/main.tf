@@ -226,6 +226,9 @@ resource "aws_instance" "jenkins_host" {
   monitoring             = true
   ebs_optimized          = true
 
+  # Ensure IAM permissions are fully attached before launching the instance
+  depends_on = [aws_iam_role_policy.jenkins_host]
+
   metadata_options {
     http_tokens = "required"
   }
