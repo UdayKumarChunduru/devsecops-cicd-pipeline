@@ -59,11 +59,10 @@ services:
       dockerfile: Dockerfile.jenkins
     image: jenkins-devsecops:lts-jdk21
     container_name: jenkins
+    network_mode: "host"
     user: root
     mem_limit: 3g
     cpus: 2.0
-    ports:
-      - "8080:8080"
     environment:
       - JAVA_OPTS=-Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true -Djenkins.install.runSetupWizard=false
       - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
@@ -115,12 +114,12 @@ jenkins:
 unclassified:
   location:
     adminAddress: devsecops-pipeline@local
-    url: http://jenkins:8080/
+    url: http://localhost:8080/
   sonarGlobalConfiguration:
     buildWrapperEnabled: true
     installations:
       - name: SonarQube
-        serverUrl: http://sonarqube:9000/sonarqube
+        serverUrl: http://localhost:9000/sonarqube
         credentialsId: sonar-token
 
 credentials:
@@ -193,7 +192,7 @@ if [ -n "$SONAR_TOKEN" ]; then
 fi
 
 curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
-  -d "name=jenkins&url=http://jenkins:8080/sonarqube-webhook/" >/dev/null || true
+  -d "name=jenkins&url=http://localhost:8080/sonarqube-webhook/" >/dev/null || true
 
 JENKINS_BUILD_OK=false
 for i in $(seq 1 5); do
