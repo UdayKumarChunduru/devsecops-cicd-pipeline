@@ -104,6 +104,17 @@ resource "aws_iam_role_policy" "codebuild" {
           "ecr:CompleteLayerUpload"
         ]
         Resource = var.ecr_repository_arn
+      },
+      {
+        Sid    = "CodeConnections"
+        Effect = "Allow"
+        Action = [
+          "codestar-connections:UseConnection",
+          "codestar-connections:GetConnectionToken",
+          "codeconnections:UseConnection",
+          "codeconnections:GetConnectionToken"
+        ]
+        Resource = "*"
       }
     ]
   })

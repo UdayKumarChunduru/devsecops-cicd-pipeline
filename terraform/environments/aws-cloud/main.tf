@@ -91,3 +91,18 @@ resource "aws_eks_access_entry" "jenkins_host" {
   type              = "STANDARD"
   depends_on        = [module.compute]
 }
+
+# Automatically attach the Jenkins ALB Webhook to your GitHub Repo
+resource "github_repository_webhook" "jenkins" {
+  count      = var.github_token != "" ? 1 : 0
+  repository = "devsecops-cicd-pipeline"
+
+  configuration {
+    url          = "http://${module.compute.alb_dns_name}/github-webhook/"
+    content_type = "json"
+    insecure_ssl = false
+  }
+
+  active = true
+  events = ["push"]
+}

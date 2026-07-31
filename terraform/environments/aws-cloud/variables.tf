@@ -41,3 +41,10 @@ variable "github_org_repo" {
   type    = string
   default = "UdayKumarChunduru/devsecops-cicd-pipeline"
 }
+
+variable "github_token" {
+  type        = string
+  description = "GitHub PAT with repo scope to automatically create webhooks"
+  sensitive   = true
+  default     = ""
+}
