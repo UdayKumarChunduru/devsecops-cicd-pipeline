@@ -1,63 +1,60 @@
-FROM jenkins/jenkins:lts-jdk21
+FROM jenkins/jenkins:lts-alpine
 
 USER root
 
 ARG RETRIES="--retry 5 --retry-delay 3"
 
-RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 && \
-    echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80-retries && \
-    echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/80-retries && \
-    echo 'Acquire::ftp::Timeout "30";' >> /etc/apt/apt.conf.d/80-retries && \
-    apt-get update -o Acquire::CompressionTypes::Order::=gz || apt-get update --fix-missing && \
-    apt-get install -y --no-install-recommends --fix-missing \
+RUN apk add --no-cache -u \
+        bash \
         ca-certificates \
         curl \
-        gnupg \
-        unzip \
+        docker-cli \
+        docker-cli-buildx \
+        docker-cli-compose \
         git \
+        gnupg \
         maven \
+        nodejs \
+        npm \
         python3 \
-        python3-pip \
-        python3-venv && \
-    rm -rf /var/lib/apt/lists/*
+        py3-pip \
+        shadow \
+        unzip \
+        aws-cli
 
-RUN install -m 0755 -d /etc/apt/keyrings && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
-    chmod a+r /etc/apt/keyrings/docker.asc && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update -o Acquire::ForceIPv4=true && \
-    apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin docker-compose-plugin && \
-    rm -rf /var/lib/apt/lists/*
-
+# 2. Install Kubernetes CLI (kubectl)
 RUN curl ${RETRIES} -sLO https://dl.k8s.io/release/$(curl ${RETRIES} -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && \
     chmod +x kubectl && \
     mv kubectl /usr/local/bin/
 
+# 3. Install Helm 3
 RUN curl ${RETRIES} -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+# 4. Prevent git workspace ownership errors in pipelines
 RUN git config --system --add safe.directory '*'
 
-RUN curl ${RETRIES} -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    apt-get update -o Acquire::ForceIPv4=true && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g snyk
-
-RUN curl ${RETRIES} -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-
-RUN curl ${RETRIES} -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz && \
+# 5. Install security scanners (Snyk, Trivy, Gitleaks)
+RUN npm install -g snyk && \
+    curl ${RETRIES} -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin && \
+    curl ${RETRIES} -sLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz && \
     tar -xzf gitleaks.tar.gz gitleaks && \
     mv gitleaks /usr/local/bin/ && \
     rm gitleaks.tar.gz
 
-RUN curl ${RETRIES} "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-    unzip -q awscliv2.zip && \
-    ./aws/install && \
-    rm -rf awscliv2.zip
+# 6. Verify tool installations
+RUN node --version && \
+    npm --version && \
+    snyk --version && \
+    trivy --version && \
+    gitleaks version && \
+    python3 --version && \
+    pip3 --version && \
+    aws --version && \
+    docker --version && \
+    kubectl version --client && \
+    helm version --short
 
-RUN node --version && npm --version && snyk --version && trivy --version && gitleaks version && python3 --version && pip3 --version && aws --version && docker --version
-
+# 7. Install Jenkins plugins
 COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 

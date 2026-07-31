@@ -3,6 +3,8 @@ exec > >(tee -a /var/log/user-data.log | tee /dev/console) 2>&1
 set -euo pipefail
 set -x
 
+trap 'echo "line $LINENO exited with status $?" > /opt/devsecops/bootstrap-failed 2>/dev/null || (mkdir -p /opt/devsecops && echo "line $LINENO exited with status $?" > /opt/devsecops/bootstrap-failed)' ERR
+
 dnf install -y docker amazon-efs-utils awscli git
 systemctl enable amazon-ssm-agent
 systemctl restart amazon-ssm-agent
@@ -165,7 +167,7 @@ sed -i "s#JENKINS_USER_PLACEHOLDER#$JENKINS_ADMIN_USER#g; s#JENKINS_PASSWORD_PLA
 cd /opt/devsecops
 docker compose up -d sonarqube
 
-for i in $(seq 1 60); do
+for i in $(seq 1 90); do
   STATUS=$(curl -s -L http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || true)
   if echo "$STATUS" | grep -q "UP" 2>/dev/null; then
     break
@@ -193,13 +195,20 @@ fi
 curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
   -d "name=jenkins&url=http://jenkins:8080/sonarqube-webhook/" >/dev/null || true
 
+JENKINS_BUILD_OK=false
 for i in $(seq 1 5); do
   if docker compose up -d --build jenkins; then
+    JENKINS_BUILD_OK=true
     break
   fi
   echo "Jenkins docker compose build failed, retrying in 30 seconds... (attempt $i/5)"
   sleep 30
 done
+
+if [ "$JENKINS_BUILD_OK" != "true" ]; then
+  echo "jenkins image build failed after 5 attempts" > /opt/devsecops/bootstrap-failed
+  exit 1
+fi
 
 aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin ${ecr_repository_url} || true
 

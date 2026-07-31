@@ -4,7 +4,7 @@ VENV_DIR = .venv
 VENV_BIN = $(VENV_DIR)/bin
 ANSIBLE  = $(VENV_BIN)/ansible-playbook
 STAMP    = $(VENV_DIR)/.installed
-ANSIBLE_ARGS ?= -v
+ANSIBLE_ARGS ?= -vvvv
 
 ANSIBLE_RUN = cd ansible && ../$(ANSIBLE) $(ANSIBLE_ARGS)
 

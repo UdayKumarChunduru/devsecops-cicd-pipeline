@@ -135,7 +135,10 @@ resource "aws_iam_role_policy" "jenkins_host" {
           "secretsmanager:DescribeSecret",
           "secretsmanager:ListSecrets"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:devsecops-pipeline/*",
+          "*"
+        ]
       },
       {
         Sid    = "SonarTokenWriteOnly"
@@ -144,7 +147,10 @@ resource "aws_iam_role_policy" "jenkins_host" {
           "secretsmanager:PutSecretValue",
           "secretsmanager:UpdateSecret"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:devsecops-pipeline/*",
+          "*"
+        ]
       },
       {
         Sid    = "SecretsKmsUse"
@@ -155,7 +161,10 @@ resource "aws_iam_role_policy" "jenkins_host" {
           "kms:GenerateDataKey",
           "kms:Encrypt"
         ]
-        Resource = "*"
+        Resource = [
+          var.secrets_kms_key_arn,
+          "*"
+        ]
       },
       {
         Sid    = "EcrAuthToken"

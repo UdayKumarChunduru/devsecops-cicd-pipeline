@@ -53,12 +53,12 @@
       delay: 20
       changed_when: false
 
-    - name: Poll EC2 instance until the bootstrap completion marker is present
+    - name: Poll EC2 instance until the bootstrap completion or failure marker is present
       ansible.builtin.shell: |
         CMD_ID=$(aws ssm send-command \
           --instance-ids {{ tf_outputs.instance_id.value }} \
           --document-name "AWS-RunShellScript" \
-          --parameters commands="test -f /opt/devsecops/bootstrap-complete" \
+          --parameters commands="if test -f /opt/devsecops/bootstrap-complete; then echo BOOTSTRAP_COMPLETE; elif test -f /opt/devsecops/bootstrap-failed; then echo BOOTSTRAP_FAILED; else echo BOOTSTRAP_PENDING; fi" \
           --region {{ aws_region }} \
           --query "Command.CommandId" \
           --output text)
@@ -67,35 +67,67 @@
           --command-id "$CMD_ID" \
           --instance-id {{ tf_outputs.instance_id.value }} \
           --region {{ aws_region }} \
-          --query "Status" \
+          --query "StandardOutputContent" \
           --output text
       register: bootstrap_status
-      until: bootstrap_status.stdout == "Success"
-      retries: 45
-      delay: 15
+      until: "'BOOTSTRAP_COMPLETE' in bootstrap_status.stdout or 'BOOTSTRAP_FAILED' in bootstrap_status.stdout"
+      retries: 200
+      delay: 20
       failed_when: false
       changed_when: false
 
-    - name: Fetch the full user-data bootstrap log if the script failed or timed out
+    - name: Fetch the bootstrap failure reason if the script crashed
       ansible.builtin.command:
         cmd: >
           aws ssm send-command
           --instance-ids {{ tf_outputs.instance_id.value }}
           --document-name "AWS-RunShellScript"
-          --parameters commands="cat /var/log/cloud-init-output.log"
+          --parameters commands="cat /opt/devsecops/bootstrap-failed"
+          --region {{ aws_region }}
+          --query "Command.CommandId"
+          --output text
+      register: failure_reason_cmd
+      when: "'BOOTSTRAP_FAILED' in bootstrap_status.stdout"
+      changed_when: false
+
+    - name: Pause for the failure reason command to complete
+      ansible.builtin.pause:
+        seconds: 5
+      when: "'BOOTSTRAP_FAILED' in bootstrap_status.stdout"
+
+    - name: Retrieve the bootstrap failure reason
+      ansible.builtin.command:
+        cmd: >
+          aws ssm get-command-invocation
+          --command-id {{ failure_reason_cmd.stdout }}
+          --instance-id {{ tf_outputs.instance_id.value }}
+          --region {{ aws_region }}
+          --query "StandardOutputContent"
+          --output text
+      register: failure_reason
+      when: "'BOOTSTRAP_FAILED' in bootstrap_status.stdout"
+      changed_when: false
+
+    - name: Fetch the last 150 lines of the full bootstrap log for diagnosis
+      ansible.builtin.command:
+        cmd: >
+          aws ssm send-command
+          --instance-ids {{ tf_outputs.instance_id.value }}
+          --document-name "AWS-RunShellScript"
+          --parameters commands="tail -n 150 /var/log/user-data.log"
           --region {{ aws_region }}
           --query "Command.CommandId"
           --output text
       register: log_fetch_cmd
-      when: bootstrap_status.stdout != "Success"
+      when: "'BOOTSTRAP_COMPLETE' not in bootstrap_status.stdout"
       changed_when: false
 
     - name: Pause for the log fetch command to complete
       ansible.builtin.pause:
         seconds: 5
-      when: bootstrap_status.stdout != "Success"
+      when: "'BOOTSTRAP_COMPLETE' not in bootstrap_status.stdout"
 
-    - name: Retrieve the contents of the bootstrap log
+    - name: Retrieve the tail of the bootstrap log
       ansible.builtin.command:
         cmd: >
           aws ssm get-command-invocation
@@ -105,18 +137,20 @@
           --query "StandardOutputContent"
           --output text
       register: bootstrap_log
-      when: bootstrap_status.stdout != "Success"
+      when: "'BOOTSTRAP_COMPLETE' not in bootstrap_status.stdout"
       changed_when: false
 
-    - name: Print the bootstrap log to this terminal
+    - name: Print the bootstrap failure reason and log tail
       ansible.builtin.debug:
-        msg: "{{ bootstrap_log.stdout_lines }}"
-      when: bootstrap_status.stdout != "Success"
+        msg:
+          - "failure reason: {{ failure_reason.stdout | default('none, this was a timeout not a crash') }}"
+          - "{{ bootstrap_log.stdout_lines | default([]) }}"
+      when: "'BOOTSTRAP_COMPLETE' not in bootstrap_status.stdout"
 
     - name: Fail loudly if bootstrap did not complete successfully
       ansible.builtin.fail:
-        msg: "jenkins and sonarqube bootstrap on the ec2 instance did not complete, see the log printed above for the exact failure"
-      when: bootstrap_status.stdout != "Success"
+        msg: "jenkins and sonarqube bootstrap on the ec2 instance did not complete, see the failure reason and log tail printed above"
+      when: "'BOOTSTRAP_COMPLETE' not in bootstrap_status.stdout"
 
     - name: Read jenkins and sonarqube credentials from secrets manager
       no_log: true
