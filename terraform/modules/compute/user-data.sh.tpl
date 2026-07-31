@@ -245,11 +245,12 @@ for i in $(seq 1 60); do
 done
 
 # Automatically trigger the first pipeline build so Jenkins primes the githubPush webhook
-CRUMB=$(curl -s -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_PASSWORD}" "http://127.0.0.1:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" || true)
+# Written without curly braces so Terraform templatefile() does not attempt variable interpolation
+CRUMB=$(curl -s -u "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" "http://127.0.0.1:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" || true)
 if [ -n "$CRUMB" ]; then
-  curl -s -X POST -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_PASSWORD}" -H "$CRUMB" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true
+  curl -s -X POST -u "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" -H "$CRUMB" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true
 else
-  curl -s -X POST -u "${JENKINS_ADMIN_USER}:${JENKINS_ADMIN_PASSWORD}" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true
+  curl -s -X POST -u "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true
 fi
 
 touch /opt/devsecops/bootstrap-complete
