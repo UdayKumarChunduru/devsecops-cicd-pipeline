@@ -14,3 +14,8 @@ variable "github_repo_url" {
 variable "ecr_repository_arn" {
   type = string
 }
+
+variable "codeconnection_arn" {
+  type        = string
+  description = "ARN of the Available AWS CodeConnection for GitHub"
+}

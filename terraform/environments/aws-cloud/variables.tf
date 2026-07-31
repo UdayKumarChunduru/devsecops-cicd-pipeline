@@ -48,3 +48,9 @@ variable "github_token" {
   sensitive   = true
   default     = ""
 }
+
+variable "codeconnection_arn" {
+  type        = string
+  description = "ARN of the Available AWS CodeConnection for GitHub"
+  default     = "arn:aws:codeconnections:us-east-1:443370683730:connection/137d49ad-a749-4a17-8aa2-b92d978166b1"
+}

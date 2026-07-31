@@ -49,6 +49,7 @@ module "codebuild" {
   ecr_repository_arn = module.ecr.repository_arn
   aws_region         = var.aws_region
   github_repo_url    = "https://github.com/${var.github_org_repo}.git"
+  codeconnection_arn = var.codeconnection_arn
 }
 
 module "compute" {
