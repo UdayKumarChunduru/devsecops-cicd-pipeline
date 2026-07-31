@@ -244,9 +244,16 @@ for i in $(seq 1 60); do
   sleep 5
 done
 
-# Automatically trigger the first pipeline build using the official Jenkins CLI to bypass HTTP CSRF cookie restrictions
+# Automatically trigger the first pipeline build using curl with session cookies to satisfy Jenkins CSRF protection
 for i in $(seq 1 10); do
-  if docker exec jenkins java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar -s http://127.0.0.1:8080/ -auth "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" build devsecops-pipeline; then
+  rm -f /tmp/jenkins_cookies.txt
+  CRUMB=$(curl -s -c /tmp/jenkins_cookies.txt -u "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" "http://127.0.0.1:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" || true)
+  if [ -n "$CRUMB" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%%{http_code}" -b /tmp/jenkins_cookies.txt -X POST -u "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" -H "$CRUMB" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true)
+  else
+    HTTP_CODE=$(curl -s -o /dev/null -w "%%{http_code}" -b /tmp/jenkins_cookies.txt -X POST -u "$JENKINS_ADMIN_USER:$JENKINS_ADMIN_PASSWORD" "http://127.0.0.1:8080/job/devsecops-pipeline/build" || true)
+  fi
+  if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "302" ]; then
     break
   fi
   sleep 5
