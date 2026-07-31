@@ -45,11 +45,35 @@ mkdir -p /opt/devsecops
 cd /opt/devsecops
 git clone --branch terraform-aws-cloud --depth 1 https://github.com/UdayKumarChunduru/devsecops-cicd-pipeline.git repo
 
-JENKINS_ADMIN_USER=$(aws secretsmanager get-secret-value --secret-id devsecops-pipeline/jenkins-admin-user --region ${aws_region} --query SecretString --output text)
-JENKINS_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id devsecops-pipeline/jenkins-admin-password --region ${aws_region} --query SecretString --output text)
-SONAR_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id devsecops-pipeline/sonar-admin-password --region ${aws_region} --query SecretString --output text)
-SNYK_TOKEN=$(aws secretsmanager get-secret-value --secret-id devsecops-pipeline/snyk-token --region ${aws_region} --query SecretString --output text)
+# Helper function to retry reading secrets while IAM permissions propagate
+get_secret() {
+  local secret_id="$1"
+  for i in $(seq 1 12); do
+    local val
+    if val=$(aws secretsmanager get-secret-value --secret-id "$secret_id" --region "${aws_region}" --query SecretString --output text 2>/dev/null); then
+      echo "$val"
+      return 0
+    fi
+    echo "Waiting for IAM policy propagation to read $secret_id (attempt $i/12)..." >&2
+    sleep 5
+  done
+  echo "Failed to read secret $secret_id after 12 attempts" >&2
+  return 1
+}
+
+JENKINS_ADMIN_USER=$(get_secret "devsecops-pipeline/jenkins-admin-user")
+JENKINS_ADMIN_PASSWORD=$(get_secret "devsecops-pipeline/jenkins-admin-password")
+SONAR_ADMIN_PASSWORD=$(get_secret "devsecops-pipeline/sonar-admin-password")
+SNYK_TOKEN=$(get_secret "devsecops-pipeline/snyk-token")
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Retrieve EC2 Private IP to bypass SonarQube loopback webhook restrictions
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60" || true)
+if [ -n "$TOKEN" ]; then
+  EC2_PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+else
+  EC2_PRIVATE_IP=$(hostname -i | awk '{print $1}')
+fi
 
 cat > /opt/devsecops/docker-compose.yml << 'COMPOSEEOF'
 services:
@@ -114,12 +138,12 @@ jenkins:
 unclassified:
   location:
     adminAddress: devsecops-pipeline@local
-    url: http://localhost:8080/
+    url: http://127.0.0.1:8080/
   sonarGlobalConfiguration:
     buildWrapperEnabled: true
     installations:
       - name: SonarQube
-        serverUrl: http://localhost:9000/sonarqube
+        serverUrl: http://127.0.0.1:9000/sonarqube
         credentialsId: sonar-token
 
 credentials:
@@ -167,23 +191,23 @@ cd /opt/devsecops
 docker compose up -d sonarqube
 
 for i in $(seq 1 90); do
-  STATUS=$(curl -s -L http://localhost:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || true)
+  STATUS=$(curl -s -L http://127.0.0.1:9000/sonarqube/api/system/status | grep -o '"status":"[A-Z]*"' || true)
   if echo "$STATUS" | grep -q "UP" 2>/dev/null; then
     break
   fi
   sleep 10
 done
 
-DEFAULT_CHECK=$(curl -s -L -u admin:admin http://localhost:9000/sonarqube/api/authentication/validate || true)
+DEFAULT_CHECK=$(curl -s -L -u admin:admin http://127.0.0.1:9000/sonarqube/api/authentication/validate || true)
 if echo "$DEFAULT_CHECK" | grep -q '"valid":true' 2>/dev/null; then
-  curl -s -L -u admin:admin -X POST "http://localhost:9000/sonarqube/api/users/change_password" \
+  curl -s -L -u admin:admin -X POST "http://127.0.0.1:9000/sonarqube/api/users/change_password" \
     --data-urlencode "login=admin" \
     --data-urlencode "previousPassword=admin" \
     --data-urlencode "password=$SONAR_ADMIN_PASSWORD" || true
 fi
 
-curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/revoke" -d "name=jenkins" >/dev/null || true
-TOKEN_RESPONSE=$(curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/user_tokens/generate" -d "name=jenkins" || echo "")
+curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://127.0.0.1:9000/sonarqube/api/user_tokens/revoke" -d "name=jenkins" >/dev/null || true
+TOKEN_RESPONSE=$(curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://127.0.0.1:9000/sonarqube/api/user_tokens/generate" -d "name=jenkins" || echo "")
 SONAR_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || echo "")
 
 if [ -n "$SONAR_TOKEN" ]; then
@@ -191,8 +215,9 @@ if [ -n "$SONAR_TOKEN" ]; then
   aws secretsmanager put-secret-value --secret-id devsecops-pipeline/sonar-token --region ${aws_region} --secret-string "$SONAR_TOKEN" || true
 fi
 
-curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://localhost:9000/sonarqube/api/webhooks/create" \
-  -d "name=jenkins&url=http://localhost:8080/sonarqube-webhook/" >/dev/null || true
+# Use EC2_PRIVATE_IP so SonarQube SSRF protection accepts the webhook URL
+curl -s -L -u "admin:$SONAR_ADMIN_PASSWORD" -X POST "http://127.0.0.1:9000/sonarqube/api/webhooks/create" \
+  -d "name=jenkins&url=http://${EC2_PRIVATE_IP}:8080/sonarqube-webhook/" >/dev/null || true
 
 JENKINS_BUILD_OK=false
 for i in $(seq 1 5); do

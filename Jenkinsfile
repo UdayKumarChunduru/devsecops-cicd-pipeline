@@ -5,7 +5,7 @@ pipeline {
         APP_NAME          = 'demo-service'
         AWS_REGION        = 'us-east-1'
         AWS_ACCOUNT_ID    = credentials('aws-account-id')
-        SONAR_HOST_URL    = 'http://localhost:9000/sonarqube'
+        SONAR_HOST_URL    = 'http://127.0.0.1:9000/sonarqube'
         MAVEN_OPTS        = "-Xmx1024m -Dmaven.repo.local=/var/jenkins_home/.m2/repository"
         EKS_CLUSTER_NAME  = 'devsecops-real'
         K8S_NAMESPACE     = 'devsecops-pipeline'
